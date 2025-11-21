@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AudioInput from './components/AudioInput';
 import AudioPlayer from './components/AudioPlayer';
 import Transcript from './components/Transcript';
@@ -9,6 +9,17 @@ import axios from 'axios';
 
 function App() {
   const [activeTab, setActiveTab] = useState('scripted');
+  const [questions, setQuestions] = useState([]);
+  const [topics, setTopics] = useState([]);
+
+  useEffect(() => {
+    axios.get('/api/questions')
+      .then(res => {
+        setQuestions(res.data.questions || []);
+        setTopics(res.data.topics || []);
+      })
+      .catch(err => console.error('Failed to load questions:', err));
+  }, []);
 
   // Scripted (Part 1) state
   const [scriptedResults, setScriptedResults] = useState(null);
@@ -238,6 +249,8 @@ function App() {
                   loading={unscriptedLoading}
                   mode="unscripted"
                   buttonText="Get Feedback"
+                  questions={questions}
+                  topics={topics}
                 />
                 {unscriptedError && (
                   <div className="mt-4 bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl">

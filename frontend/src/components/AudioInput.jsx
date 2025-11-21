@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
+import QuestionSelector from './QuestionSelector';
 
-function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Get Feedback' }) {
+function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Get Feedback', questions = [], topics = [] }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -119,19 +120,12 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
 
       {/* Question Input for Unscripted Mode */}
       {mode === 'unscripted' && (
-        <div>
-          <label className="block text-slate-300 font-medium mb-2">
-            Question <span className="text-slate-500">(optional - for relevance scoring)</span>
-          </label>
-          <input
-            type="text"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="e.g., What is your favorite hobby and why?"
-            disabled={loading}
-            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-pink-500 focus:border-transparent disabled:opacity-50 transition-all duration-300"
-          />
-        </div>
+        <QuestionSelector
+          questions={questions}
+          topics={topics}
+          onQuestionChange={setQuestion}
+          disabled={loading}
+        />
       )}
 
       {/* Audio Input Options */}

@@ -39,6 +39,17 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/questions")
+async def get_questions():
+    """Get all questions from database"""
+    questions_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'questionaire.json')
+    with open(questions_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    questions = data.get('speaking_test_questions', [])
+    topics = list(set(q['topic'] for q in questions))
+    return {"questions": questions, "topics": sorted(topics)}
+
+
 @app.post("/api/evaluate")
 async def evaluate_audio(
     audio: UploadFile = File(...),
