@@ -23,9 +23,8 @@ function Relevance({ relevance, scoreIssueList }) {
           <ul className="space-y-2">
             {scoreIssueList.map((issue, index) => (
               <li key={index} className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
-                <span className="font-medium text-yellow-800">{issue.issue_type || issue.type}</span>
-                {issue.description && (
-                  <p className="text-yellow-700 text-sm mt-1">{issue.description}</p>
+                {issue.detail_message && (
+                  <p className="text-yellow-700 text-sm mt-1">{issue.detail_message}</p>
                 )}
               </li>
             ))}

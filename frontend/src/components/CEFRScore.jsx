@@ -10,7 +10,7 @@ function CEFRScore({ cefrScore }) {
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">CEFR Score</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">Score</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {scores.map((score, index) => (
           <div
