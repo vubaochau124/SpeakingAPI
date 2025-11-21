@@ -6,6 +6,7 @@ function AudioInput({ onEvaluate, loading }) {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [recordStatus, setRecordStatus] = useState('');
   const [fileName, setFileName] = useState('');
+  const [question, setQuestion] = useState('');
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -58,7 +59,7 @@ function AudioInput({ onEvaluate, loading }) {
       : uploadedFile;
 
     if (audioFile) {
-      onEvaluate(audioFile);
+      onEvaluate(audioFile, question);
     } else {
       alert('Please record or upload audio first');
     }
@@ -131,6 +132,22 @@ function AudioInput({ onEvaluate, loading }) {
           />
           <p className="mt-2 text-sm text-gray-500">{fileName}</p>
         </div>
+      </div>
+
+      {/* Optional Question */}
+      <div className="mt-4">
+        <label htmlFor="question" className="block text-sm font-medium text-gray-700 mb-2">
+          Question (optional) - for relevance scoring
+        </label>
+        <input
+          type="text"
+          id="question"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="e.g., What is your favorite hobby?"
+          disabled={loading}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+        />
       </div>
 
       {/* Submit Button */}

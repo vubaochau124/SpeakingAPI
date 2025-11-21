@@ -1,7 +1,8 @@
 import os
 import tempfile
 import base64
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from speechace_api import SpeechAceAPI
 
@@ -33,7 +34,10 @@ async def health():
 
 
 @app.post("/api/evaluate")
-async def evaluate_audio(audio: UploadFile = File(...)):
+async def evaluate_audio(
+    audio: UploadFile = File(...),
+    question: Optional[str] = Form(None)
+):
     """Endpoint to evaluate audio file"""
 
     # Validate file
@@ -61,6 +65,7 @@ async def evaluate_audio(audio: UploadFile = File(...)):
             audio_file_path=filepath,
             user_id="web-user",
             dialect="en-us",
+            relevance_context=question or "",
             pronunciation_score_mode="default",
             detect_dialect=1,
             enforce_dialect=1

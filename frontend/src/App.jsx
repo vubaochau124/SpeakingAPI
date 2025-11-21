@@ -3,6 +3,7 @@ import AudioInput from './components/AudioInput';
 import AudioPlayer from './components/AudioPlayer';
 import Transcript from './components/Transcript';
 import CEFRScore from './components/CEFRScore';
+import Relevance from './components/Relevance';
 import axios from 'axios';
 
 function App() {
@@ -10,14 +11,19 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [audioData, setAudioData] = useState(null);
+  const [hasQuestion, setHasQuestion] = useState(false);
 
-  const handleEvaluate = async (audioFile) => {
+  const handleEvaluate = async (audioFile, question = '') => {
     setLoading(true);
     setError(null);
     setResults(null);
+    setHasQuestion(!!question.trim());
 
     const formData = new FormData();
     formData.append('audio', audioFile);
+    if (question.trim()) {
+      formData.append('question', question.trim());
+    }
 
     try {
       const response = await axios.post('/api/evaluate', formData, {
@@ -83,6 +89,14 @@ function App() {
             {/* CEFR Score */}
             {results.speech_score?.cefr_score && (
               <CEFRScore cefrScore={results.speech_score.cefr_score} />
+            )}
+
+            {/* Relevance (only shown when question was provided) */}
+            {hasQuestion && (results.speech_score?.relevance || results.speech_score?.score_issue_list) && (
+              <Relevance
+                relevance={results.speech_score.relevance}
+                scoreIssueList={results.speech_score.score_issue_list}
+              />
             )}
           </div>
         )}
