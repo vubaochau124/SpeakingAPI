@@ -4,7 +4,12 @@ import AudioPlayer from './components/AudioPlayer';
 import Transcript from './components/Transcript';
 import Relevance from './components/Relevance';
 import IELTSScore from './components/IELTSScore';
+import PTEScore from './components/PTEScore';
+import TOEICScore from './components/TOEICScore';
+import CEFRScore from './components/CEFRScore';
+import SpeechAceScore from './components/SpeechAceScore';
 import FeedbackDetails from './components/FeedbackDetails';
+import ScoreSelector from './components/ScoreSelector';
 import axios from 'axios';
 
 function App() {
@@ -32,6 +37,7 @@ function App() {
   const [unscriptedError, setUnscriptedError] = useState(null);
   const [hasQuestion, setHasQuestion] = useState(false);
   const [showImprovedTranscript, setShowImprovedTranscript] = useState(false);
+  const [scoringSystem, setScoringSystem] = useState('ielts');
 
   const handleScriptedEvaluate = async (audioFile, text, options = {}) => {
     setScriptedLoading(true);
@@ -188,12 +194,55 @@ function App() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* IELTS Score Card */}
-                <IELTSScore
-                  ieltsScore={scriptedResults.text_score?.ielts_score}
-                  title="Part 1 Score"
-                  detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                {/* Score Selector */}
+                <ScoreSelector
+                  activeSystem={scoringSystem}
+                  onSystemChange={setScoringSystem}
+                  availableSystems={{
+                    ielts: !!scriptedResults.text_score?.ielts_score,
+                    pte: !!scriptedResults.text_score?.pte_score,
+                    toeic: !!scriptedResults.text_score?.toeic_score,
+                    cefr: !!scriptedResults.text_score?.cefr_score,
+                    speechace: !!scriptedResults.text_score?.speechace_score
+                  }}
                 />
+
+                {/* Score Cards - Conditional based on selected system */}
+                {scoringSystem === 'ielts' && scriptedResults.text_score?.ielts_score && (
+                  <IELTSScore
+                    ieltsScore={scriptedResults.text_score.ielts_score}
+                    title="Part 1 Score (IELTS)"
+                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'pte' && scriptedResults.text_score?.pte_score && (
+                  <PTEScore
+                    pteScore={scriptedResults.text_score.pte_score}
+                    title="Part 1 Score (PTE)"
+                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'toeic' && scriptedResults.text_score?.toeic_score && (
+                  <TOEICScore
+                    toeicScore={scriptedResults.text_score.toeic_score}
+                    title="Part 1 Score (TOEIC)"
+                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'cefr' && scriptedResults.text_score?.cefr_score && (
+                  <CEFRScore
+                    cefrScore={scriptedResults.text_score.cefr_score}
+                    title="Part 1 Level (CEFR)"
+                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'speechace' && scriptedResults.text_score?.speechace_score && (
+                  <SpeechAceScore
+                    speechaceScore={scriptedResults.text_score.speechace_score}
+                    title="Part 1 Score (SpeechAce)"
+                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                  />
+                )}
 
                 {/* Audio & Transcript */}
                 <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
@@ -208,6 +257,58 @@ function App() {
                       wordList={scriptedResults.text_score.word_score_list}
                       audioData={scriptedResults.audio_data}
                     />
+                  </div>
+                )}
+
+                {/* Fluency Details for Part 1 */}
+                {scriptedResults.text_score?.fluency?.overall_metrics && (
+                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                      <span>🗣️</span> Fluency Analysis
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                        <p className="text-slate-400 text-sm mb-1">Speech Rate</p>
+                        <p className="text-2xl font-bold text-white">
+                          {scriptedResults.text_score.fluency.overall_metrics.speech_rate?.toFixed(2)}
+                          <span className="text-sm text-slate-400 ml-1">words/sec</span>
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                        <p className="text-slate-400 text-sm mb-1">Articulation Rate</p>
+                        <p className="text-2xl font-bold text-white">
+                          {scriptedResults.text_score.fluency.overall_metrics.articulation_rate?.toFixed(2)}
+                          <span className="text-sm text-slate-400 ml-1">syl/sec</span>
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                        <p className="text-slate-400 text-sm mb-1">Syllables Per Min</p>
+                        <p className="text-2xl font-bold text-white">
+                          {scriptedResults.text_score.fluency.overall_metrics.syllable_correct_per_minute?.toFixed(0)}
+                          <span className="text-sm text-slate-400 ml-1">spm</span>
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                        <p className="text-slate-400 text-sm mb-1">Words Per Min</p>
+                        <p className="text-2xl font-bold text-white">
+                          {scriptedResults.text_score.fluency.overall_metrics.word_correct_per_minute?.toFixed(0)}
+                          <span className="text-sm text-slate-400 ml-1">wpm</span>
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                        <p className="text-slate-400 text-sm mb-1">Pause Count</p>
+                        <p className="text-2xl font-bold text-amber-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_count || 0}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                        <p className="text-slate-400 text-sm mb-1">Pause Duration</p>
+                        <p className="text-2xl font-bold text-amber-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_duration?.toFixed(2) || '0.00'}
+                          <span className="text-sm text-slate-400 ml-1">sec</span>
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -259,18 +360,62 @@ function App() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* IELTS Score Card */}
-                <IELTSScore
-                  ieltsScore={unscriptedResults.speech_score?.ielts_score}
-                  title="Part 2 Score"
-                  detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                {/* Score Selector */}
+                <ScoreSelector
+                  activeSystem={scoringSystem}
+                  onSystemChange={setScoringSystem}
+                  availableSystems={{
+                    ielts: !!unscriptedResults.speech_score?.ielts_score,
+                    pte: !!unscriptedResults.speech_score?.pte_score,
+                    toeic: !!unscriptedResults.speech_score?.toeic_score,
+                    cefr: !!unscriptedResults.speech_score?.cefr_score,
+                    speechace: !!unscriptedResults.speech_score?.speechace_score
+                  }}
                 />
+
+                {/* Score Cards - Conditional based on selected system */}
+                {scoringSystem === 'ielts' && unscriptedResults.speech_score?.ielts_score && (
+                  <IELTSScore
+                    ieltsScore={unscriptedResults.speech_score.ielts_score}
+                    title="Part 2 Score (IELTS)"
+                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'pte' && unscriptedResults.speech_score?.pte_score && (
+                  <PTEScore
+                    pteScore={unscriptedResults.speech_score.pte_score}
+                    title="Part 2 Score (PTE)"
+                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'toeic' && unscriptedResults.speech_score?.toeic_score && (
+                  <TOEICScore
+                    toeicScore={unscriptedResults.speech_score.toeic_score}
+                    title="Part 2 Score (TOEIC)"
+                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'cefr' && unscriptedResults.speech_score?.cefr_score && (
+                  <CEFRScore
+                    cefrScore={unscriptedResults.speech_score.cefr_score}
+                    title="Part 2 Level (CEFR)"
+                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                  />
+                )}
+                {scoringSystem === 'speechace' && unscriptedResults.speech_score?.speechace_score && (
+                  <SpeechAceScore
+                    speechaceScore={unscriptedResults.speech_score.speechace_score}
+                    title="Part 2 Score (SpeechAce)"
+                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                  />
+                )}
 
                 {/* Audio */}
                 <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                   <h3 className="text-xl font-bold text-white mb-4">Your Recording</h3>
                   {unscriptedResults.audio_data && <AudioPlayer audioData={unscriptedResults.audio_data} />}
                 </div>
+
 
                 {/* Relevance */}
                 {hasQuestion && (unscriptedResults.speech_score?.relevance || unscriptedResults.speech_score?.score_issue_list) && (

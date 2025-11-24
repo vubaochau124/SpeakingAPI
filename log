@@ -1,0 +1,391 @@
+(speech_assessment) PS D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend> npm run dev
+
+> speech-eval-frontend@0.0.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 856 ms
+
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+2:16:59 PM [vite] Pre-transform error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\CEFRScore.jsx: Unexpected token (91:19)
+
+  89 |             <p className="text-slate-400 text-sm mt-1">
+  90 |               <
+> 91 |  Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+     |                    ^
+  92 |             </p>
+  93 |           )}
+  94 |         </div>
+2:16:59 PM [vite] Pre-transform error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\SpeechAceScore.jsx: Unexpected token (104:19)
+
+  102 |             <p className="text-slate-400 text-sm mt-1">
+  103 |               <
+> 104 |  Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+      |                    ^
+  105 |             </p>
+  106 |           )}
+  107 |         </div>
+2:16:59 PM [vite] Pre-transform error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\FluencyDetails.jsx: Unexpected token (45:0)
+
+  43 |       <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+  44 |         <span><
+> 45 | </span> Detailed Fluency Analysis
+     | ^
+  46 |       </h3>
+  47 |
+  48 |       {/* Speech & Articulation Rates */}
+2:16:59 PM [vite] Pre-transform error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\SegmentAnalysis.jsx: Unexpected token (130:81)
+
+  128 |         </span>
+  129 |         <span className="flex items-center gap-1">
+> 130 |           <span className="w-3 h-3 rounded-full bg-red-500"></span> Needs Work (<5.5)
+      |                                                                                  ^
+  131 |         </span>
+  132 |       </div>
+  133 |     </div>
+2:16:59 PM [vite] Pre-transform error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\ScoreSelector.jsx: Unexpected character '�'. (13:35)
+
+  11 |     <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 shadow-xl border border-slate-700/50 mb-6">
+  12 |       <div className="flex items-center gap-2 mb-3">
+> 13 |         <span className="text-lg"><�</span>
+     |                                    ^
+  14 |         <h3 className="text-white font-semibold">Scoring System</h3>
+  15 |       </div>
+  16 |
+2:16:59 PM [vite] Internal server error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\CEFRScore.jsx: Unexpected token (91:19)
+
+  89 |             <p className="text-slate-400 text-sm mt-1">
+  90 |               <
+> 91 |  Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+     |                    ^
+  92 |             </p>
+  93 |           )}
+  94 |         </div>
+  Plugin: vite:react-babel
+  File: D:/Project/Cty/agent/demo_api_2/SpeechAce/frontend/src/components/CEFRScore.jsx:91:19
+  88 |            {detectedDialect && (
+  89 |              <p className="text-slate-400 text-sm mt-1">
+ Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+     |                                     ^
+  91 |              </p>
+  92 |            )}
+      at constructor (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:367:19)
+      at JSXParserMixin.raise (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6624:19)
+      at JSXParserMixin.unexpected (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6644:16)
+      at JSXParserMixin.jsxParseIdentifier (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4598:12)
+      at JSXParserMixin.jsxParseNamespacedName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4609:22)
+      at JSXParserMixin.jsxParseAttribute (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4681:22)
+      at JSXParserMixin.jsxParseOpeningElementAfterName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4696:28)
+      at JSXParserMixin.jsxParseOpeningElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4691:17)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4715:33)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12567:17)     
+      at JSXParserMixin.parseParenAndDistinguishExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11747:28)       
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11395:23)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4793:20)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOpBaseRightExpr (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11050:34)
+      at JSXParserMixin.parseExprOpRightExpr (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11045:21)
+      at JSXParserMixin.parseExprOp (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11011:27)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10972:17)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at JSXParserMixin.parseExpressionBase (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10848:23)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:17)
+      at JSXParserMixin.jsxParseExpressionContainer (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4661:31)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4740:36)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+2:16:59 PM [vite] Internal server error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\SpeechAceScore.jsx: Unexpected token (104:19)
+
+  102 |             <p className="text-slate-400 text-sm mt-1">
+  103 |               <
+> 104 |  Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+      |                    ^
+  105 |             </p>
+  106 |           )}
+  107 |         </div>
+  Plugin: vite:react-babel
+  File: D:/Project/Cty/agent/demo_api_2/SpeechAce/frontend/src/components/SpeechAceScore.jsx:104:19
+  101|            {detectedDialect && (
+  102|              <p className="text-slate-400 text-sm mt-1">
+ Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+     |                                     ^
+  104|              </p>
+  105|            )}
+      at constructor (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:367:19)
+      at JSXParserMixin.raise (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6624:19)
+      at JSXParserMixin.unexpected (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6644:16)
+      at JSXParserMixin.jsxParseIdentifier (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4598:12)
+      at JSXParserMixin.jsxParseNamespacedName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4609:22)
+      at JSXParserMixin.jsxParseAttribute (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4681:22)
+      at JSXParserMixin.jsxParseOpeningElementAfterName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4696:28)
+      at JSXParserMixin.jsxParseOpeningElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4691:17)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4715:33)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12567:17)     
+      at JSXParserMixin.parseParenAndDistinguishExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11747:28)       
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11395:23)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4793:20)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOpBaseRightExpr (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11050:34)
+      at JSXParserMixin.parseExprOpRightExpr (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11045:21)
+      at JSXParserMixin.parseExprOp (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11011:27)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10972:17)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at JSXParserMixin.parseExpressionBase (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10848:23)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:17)
+      at JSXParserMixin.jsxParseExpressionContainer (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4661:31)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4740:36)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+2:16:59 PM [vite] Internal server error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\FluencyDetails.jsx: Unexpected token (45:0)
+
+  43 |       <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+  44 |         <span><
+> 45 | </span> Detailed Fluency Analysis
+     | ^
+  46 |       </h3>
+  47 |
+  48 |       {/* Speech & Articulation Rates */}
+  Plugin: vite:react-babel
+  File: D:/Project/Cty/agent/demo_api_2/SpeechAce/frontend/src/components/FluencyDetails.jsx:45:0
+  43 |        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+  44 |          <span><
+  45 |  </span> Detailed Fluency Analysis
+     |  ^
+  46 |        </h3>
+  47 |
+      at constructor (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:367:19)
+      at JSXParserMixin.raise (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6624:19)
+      at JSXParserMixin.unexpected (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6644:16)
+      at JSXParserMixin.jsxParseIdentifier (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4598:12)
+      at JSXParserMixin.jsxParseNamespacedName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4605:23)
+      at JSXParserMixin.jsxParseElementName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4614:21)
+      at JSXParserMixin.jsxParseOpeningElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4690:22)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4715:33)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12567:17)     
+      at JSXParserMixin.parseParenAndDistinguishExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11747:28)       
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11395:23)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4793:20)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at JSXParserMixin.parseExpressionBase (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10848:23)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12495:16)
+      at JSXParserMixin.parseExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:17)
+      at JSXParserMixin.parseReturnStatement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13218:28)
+      at JSXParserMixin.parseStatementContent (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12874:21)
+      at JSXParserMixin.parseStatementLike (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12843:17)
+      at JSXParserMixin.parseStatementListItem (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12823:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13392:61)
+      at JSXParserMixin.parseBlockBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13385:10)
+      at JSXParserMixin.parseBlock (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13373:10)
+      at JSXParserMixin.parseFunctionBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12174:24)
+      at JSXParserMixin.parseFunctionBodyAndFinish (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12160:10)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13521:12
+      at JSXParserMixin.withSmartMixTopicForbiddingContext (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12477:14)       
+      at JSXParserMixin.parseFunction (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13520:10)
+2:16:59 PM [vite] Internal server error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\SegmentAnalysis.jsx: Unexpected token (130:81)
+
+  128 |         </span>
+  129 |         <span className="flex items-center gap-1">
+> 130 |           <span className="w-3 h-3 rounded-full bg-red-500"></span> Needs Work (<5.5)
+      |                                                                                  ^
+  131 |         </span>
+  132 |       </div>
+  133 |     </div>
+  Plugin: vite:react-babel
+  File: D:/Project/Cty/agent/demo_api_2/SpeechAce/frontend/src/components/SegmentAnalysis.jsx:130:81
+  128|          </span>
+  129|          <span className="flex items-center gap-1">
+  130|            <span className="w-3 h-3 rounded-full bg-red-500"></span> Needs Work (<5.5)
+     |                                                                                   ^
+  131|          </span>
+  132|        </div>
+      at constructor (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:367:19)
+      at JSXParserMixin.raise (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6624:19)
+      at JSXParserMixin.unexpected (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6644:16)
+      at JSXParserMixin.jsxParseIdentifier (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4598:12)
+      at JSXParserMixin.jsxParseNamespacedName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4605:23)
+      at JSXParserMixin.jsxParseElementName (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4614:21)
+      at JSXParserMixin.jsxParseOpeningElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4690:22)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4715:33)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12567:17)     
+      at JSXParserMixin.parseParenAndDistinguishExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11747:28)       
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11395:23)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4793:20)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at JSXParserMixin.parseExpressionBase (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10848:23)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12495:16)
+      at JSXParserMixin.parseExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:17)
+      at JSXParserMixin.parseReturnStatement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13218:28)
+      at JSXParserMixin.parseStatementContent (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12874:21)
+      at JSXParserMixin.parseStatementLike (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12843:17)
+      at JSXParserMixin.parseStatementListItem (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12823:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13392:61)
+      at JSXParserMixin.parseBlockBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13385:10)
+      at JSXParserMixin.parseBlock (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13373:10)
+      at JSXParserMixin.parseFunctionBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12174:24)
+      at JSXParserMixin.parseFunctionBodyAndFinish (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12160:10)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13521:12
+      at JSXParserMixin.withSmartMixTopicForbiddingContext (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12477:14)       
+      at JSXParserMixin.parseFunction (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13520:10)
+2:16:59 PM [vite] Internal server error: D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\src\components\ScoreSelector.jsx: Unexpected character '�'. (13:35)        
+
+  11 |     <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 shadow-xl border border-slate-700/50 mb-6">
+  12 |       <div className="flex items-center gap-2 mb-3">
+> 13 |         <span className="text-lg"><�</span>
+     |                                    ^
+  14 |         <h3 className="text-white font-semibold">Scoring System</h3>
+  15 |       </div>
+  16 |
+  Plugin: vite:react-babel
+  File: D:/Project/Cty/agent/demo_api_2/SpeechAce/frontend/src/components/ScoreSelector.jsx:13:35
+  11 |      <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-4 shadow-xl border border-slate-700/50 mb-6">
+  12 |        <div className="flex items-center gap-2 mb-3">
+  13 |          <span className="text-lg"><�</span>
+     |                                     ^
+  14 |          <h3 className="text-white font-semibold">Scoring System</h3>
+  15 |        </div>
+      at constructor (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:367:19)
+      at JSXParserMixin.raise (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6624:19)
+      at JSXParserMixin.getTokenFromCode (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:6331:16)
+      at JSXParserMixin.getTokenFromCode (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4826:11)
+      at JSXParserMixin.nextToken (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:5807:10)
+      at JSXParserMixin.next (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:5717:10)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4722:18)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElementAt (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4727:32)
+      at JSXParserMixin.jsxParseElement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4778:17)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4788:19)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12500:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10864:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12567:17)     
+      at JSXParserMixin.parseParenAndDistinguishExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11747:28)       
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11395:23)
+      at JSXParserMixin.parseExprAtom (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:4793:20)
+      at JSXParserMixin.parseExprSubscripts (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11145:23)
+      at JSXParserMixin.parseUpdate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11130:21)
+      at JSXParserMixin.parseMaybeUnary (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:11110:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10963:61)
+      at JSXParserMixin.parseExprOps (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10968:23)
+      at JSXParserMixin.parseMaybeConditional (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10945:23)
+      at JSXParserMixin.parseMaybeAssign (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10895:21)
+      at JSXParserMixin.parseExpressionBase (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10848:23)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:39
+      at JSXParserMixin.allowInAnd (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12495:16)
+      at JSXParserMixin.parseExpression (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:10844:17)
+      at JSXParserMixin.parseReturnStatement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13218:28)
+      at JSXParserMixin.parseStatementContent (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12874:21)
+      at JSXParserMixin.parseStatementLike (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12843:17)
+      at JSXParserMixin.parseStatementListItem (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12823:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13392:61)
+      at JSXParserMixin.parseBlockBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13385:10)
+      at JSXParserMixin.parseBlock (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13373:10)
+      at JSXParserMixin.parseFunctionBody (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12174:24)
+      at JSXParserMixin.parseFunctionBodyAndFinish (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12160:10)
+      at D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13521:12
+      at JSXParserMixin.withSmartMixTopicForbiddingContext (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12477:14)       
+      at JSXParserMixin.parseFunction (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13520:10)
+      at JSXParserMixin.parseFunctionStatement (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:13201:17)
+      at JSXParserMixin.parseStatementContent (D:\Project\Cty\agent\demo_api_2\SpeechAce\frontend\node_modules\@babel\parser\lib\index.js:12867:21)

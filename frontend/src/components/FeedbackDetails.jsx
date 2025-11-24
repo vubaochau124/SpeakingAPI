@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 function FeedbackDetails({ grammar, vocab, coherence, fluency, wordList, onShowImprovement }) {
   const [activeTab, setActiveTab] = useState('grammar');
+  const [showNotablePauses, setShowNotablePauses] = useState(false);
 
   const getLevelColor = (level) => {
     if (level === 'high') return 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30';
@@ -77,7 +78,19 @@ function FeedbackDetails({ grammar, vocab, coherence, fluency, wordList, onShowI
       name: 'Speech Rate',
       score: fluency.overall_metrics.speech_rate?.toFixed(2) || 0,
       level: fluency.overall_metrics.speech_rate >= 4.5 ? 'high' : fluency.overall_metrics.speech_rate >= 3.5 ? 'mid' : 'low',
-      message: `${fluency.overall_metrics.speech_rate?.toFixed(2)} syllables per second`
+      message: `${fluency.overall_metrics.speech_rate?.toFixed(2)} words per second`
+    },
+    {
+      name: 'Articulation Rate',
+      score: fluency.overall_metrics.articulation_rate?.toFixed(2) || 0,
+      level: fluency.overall_metrics.articulation_rate >= 4.5 ? 'high' : fluency.overall_metrics.articulation_rate >= 3.0 ? 'mid' : 'low',
+      message: `${fluency.overall_metrics.articulation_rate?.toFixed(2)} syllables per second (when speaking)`
+    },
+    {
+      name: 'Syllables Correct Per Minute',
+      score: fluency.overall_metrics.syllable_correct_per_minute?.toFixed(1) || 0,
+      level: fluency.overall_metrics.syllable_correct_per_minute >= 200 ? 'high' : fluency.overall_metrics.syllable_correct_per_minute >= 150 ? 'mid' : 'low',
+      message: `${fluency.overall_metrics.syllable_correct_per_minute?.toFixed(1)} correct syllables per minute`
     },
     {
       name: 'Words Correct Per Minute',
@@ -91,7 +104,7 @@ function FeedbackDetails({ grammar, vocab, coherence, fluency, wordList, onShowI
       message: `${fluency.overall_metrics.all_pause_count || 0} pauses detected`
     },
     {
-      name: 'Pause Duration',
+      name: 'Total Pause Duration',
       score: fluency.overall_metrics.all_pause_duration?.toFixed(2) || 0,
       message: `${fluency.overall_metrics.all_pause_duration?.toFixed(2)} seconds total pause time`
     }
@@ -206,7 +219,7 @@ function FeedbackDetails({ grammar, vocab, coherence, fluency, wordList, onShowI
                 ))}
               </div>
 
-              {/* Pause List - Only show pauses > 0.5s */}
+              {/* Notable Pauses - Collapsible */}
               {fluency?.overall_metrics?.all_pause_list && (() => {
                 const notablePauses = fluency.overall_metrics.all_pause_list.filter(pause => {
                   const duration = (pause[1] - pause[0]) / 100;
@@ -215,40 +228,55 @@ function FeedbackDetails({ grammar, vocab, coherence, fluency, wordList, onShowI
 
                 return notablePauses.length > 0 && (
                   <div className="mt-4">
-                    <h4 className="text-lg font-semibold text-white mb-3">Notable Pauses ({">"} 0.3s)</h4>
-                    <div className="space-y-2">
-                      {notablePauses.map((pause, idx) => {
-                        const pauseStart = pause[0];
-                        const pauseEnd = pause[1];
-                        const duration = ((pauseEnd - pauseStart) / 100).toFixed(2);
-                        const wordsInfo = getPauseBetweenWords(pauseStart, pauseEnd);
+                    <button
+                      onClick={() => setShowNotablePauses(!showNotablePauses)}
+                      className="w-full flex items-center justify-between p-4 rounded-xl bg-slate-700/30 border border-slate-600/30 hover:bg-slate-700/50 transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{showNotablePauses ? '📂' : '📁'}</span>
+                        <h4 className="text-lg font-semibold text-white">Notable Pauses ({notablePauses.length})</h4>
+                        <span className="text-sm text-slate-400">&gt; 0.3s</span>
+                      </div>
+                      <span className="text-slate-400">
+                        {showNotablePauses ? '▼' : '▶'}
+                      </span>
+                    </button>
 
-                        return (
-                          <div key={idx} className="p-3 rounded-lg bg-slate-700/30 border border-slate-600">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs px-2 py-1 bg-slate-600 text-slate-300 rounded">
-                                  Pause {idx + 1}
-                                </span>
-                                {wordsInfo && (
-                                  <div className="flex items-center gap-1 text-slate-300">
-                                    {wordsInfo.wordBefore && (
-                                      <span className="font-medium text-white">"{wordsInfo.wordBefore}"</span>
-                                    )}
-                                    <span className="text-slate-500">→</span>
-                                    <span className="text-pink-400">⏸ {duration}s</span>
-                                    <span className="text-slate-500">→</span>
-                                    {wordsInfo.wordAfter && (
-                                      <span className="font-medium text-white">"{wordsInfo.wordAfter}"</span>
-                                    )}
-                                  </div>
-                                )}
+                    {showNotablePauses && (
+                      <div className="mt-3 space-y-2 max-h-96 overflow-y-auto">
+                        {notablePauses.map((pause, idx) => {
+                          const pauseStart = pause[0];
+                          const pauseEnd = pause[1];
+                          const duration = ((pauseEnd - pauseStart) / 100).toFixed(2);
+                          const wordsInfo = getPauseBetweenWords(pauseStart, pauseEnd);
+
+                          return (
+                            <div key={idx} className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs px-2 py-1 bg-slate-600 text-slate-300 rounded">
+                                    #{idx + 1}
+                                  </span>
+                                  {wordsInfo && (
+                                    <div className="flex items-center gap-1 text-slate-300 text-sm">
+                                      {wordsInfo.wordBefore && (
+                                        <span className="font-medium text-white">"{wordsInfo.wordBefore}"</span>
+                                      )}
+                                      <span className="text-slate-500">→</span>
+                                      <span className="text-pink-400 font-bold">⏸ {duration}s</span>
+                                      <span className="text-slate-500">→</span>
+                                      {wordsInfo.wordAfter && (
+                                        <span className="font-medium text-white">"{wordsInfo.wordAfter}"</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}

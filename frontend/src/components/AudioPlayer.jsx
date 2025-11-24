@@ -1,8 +1,14 @@
 function AudioPlayer({ audioData }) {
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Audio</h2>
-      <audio controls className="w-full" src={audioData}>
+    <div className="space-y-4">
+      <audio
+        controls
+        className="w-full h-12 rounded-xl bg-slate-700/50 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        src={audioData}
+        style={{
+          filter: 'invert(0.9) hue-rotate(180deg)',
+        }}
+      >
         Your browser does not support the audio element.
       </audio>
     </div>

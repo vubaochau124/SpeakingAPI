@@ -77,11 +77,21 @@ function IELTSScore({ ieltsScore, title = "IELTS Score", detectedDialect }) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <ScoreItem label="Pronunciation" value={ieltsScore.pronunciation} icon="🎯" />
-        <ScoreItem label="Fluency" value={ieltsScore.fluency} icon="🌊" />
-        <ScoreItem label="Grammar" value={ieltsScore.grammar} icon="📝" />
-        <ScoreItem label="Coherence" value={ieltsScore.coherence} icon="🔗" />
-        <ScoreItem label="Vocabulary" value={ieltsScore.vocab} icon="📚" />
+        {ieltsScore.pronunciation != null && (
+          <ScoreItem label="Pronunciation" value={ieltsScore.pronunciation} icon="🎯" />
+        )}
+        {ieltsScore.fluency != null && (
+          <ScoreItem label="Fluency" value={ieltsScore.fluency} icon="🌊" />
+        )}
+        {ieltsScore.grammar != null && (
+          <ScoreItem label="Grammar" value={ieltsScore.grammar} icon="📝" />
+        )}
+        {ieltsScore.coherence != null && (
+          <ScoreItem label="Coherence" value={ieltsScore.coherence} icon="🔗" />
+        )}
+        {ieltsScore.vocab != null && (
+          <ScoreItem label="Vocabulary" value={ieltsScore.vocab} icon="📚" />
+        )}
       </div>
     </div>
   );
