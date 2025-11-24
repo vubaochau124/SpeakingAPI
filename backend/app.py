@@ -129,8 +129,7 @@ async def evaluate_audio(
 async def evaluate_scripted(
     audio: UploadFile = File(...),
     text: str = Form(...),
-    dialect: Optional[str] = Form("en-us"),
-    pronunciation_score_mode: Optional[str] = Form("default")
+    dialect: Optional[str] = Form("en-us")
 ):
     """Endpoint to evaluate scripted audio (reading a given text)"""
 
@@ -158,7 +157,7 @@ async def evaluate_scripted(
             text=text.strip(),
             user_id="web-user",
             dialect=dialect or "en-us",
-            pronunciation_score_mode=pronunciation_score_mode or "default"
+            include_fluency=1
         )
 
         # Save results to JSON file (overwrite)

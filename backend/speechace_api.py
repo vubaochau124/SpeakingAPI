@@ -99,7 +99,7 @@ class SpeechAceAPI:
     def score_text(self, audio_file_path, text,
                    user_id="XYZ-ABC-99001",
                    dialect="en-us",
-                   pronunciation_score_mode="default"):
+                   include_fluency=1):
         """Send audio file with expected text to SpeechAce API for scripted evaluation
 
         Args:
@@ -107,7 +107,7 @@ class SpeechAceAPI:
             text (str): Expected text the user should read
             user_id (str): User identifier
             dialect (str): Accent/dialect (en-us, en-gb, etc.)
-            pronunciation_score_mode (str): Scoring mode (default, strict)
+            include_fluency (int): Include fluency scoring (0 or 1)
 
         Returns:
             dict: API response with evaluation results
@@ -122,7 +122,7 @@ class SpeechAceAPI:
 
         payload = {
             'text': text,
-            'pronunciation_score_mode': pronunciation_score_mode
+            'include_fluency': include_fluency
         }
 
         print(f"Sending audio file for text scoring: {audio_file_path}")

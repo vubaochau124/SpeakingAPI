@@ -87,6 +87,27 @@ function Transcript({ transcript, wordList, audioData }) {
     return typeof score === 'number' ? score.toFixed(1) : score;
   };
 
+  const getWordWithStress = (wordInfo) => {
+    if (!wordInfo.syllable_score_list || wordInfo.syllable_score_list.length < 2) {
+      return wordInfo.word;
+    }
+
+    let stressedWord = '';
+    for (const syllable of wordInfo.syllable_score_list) {
+      const letters = syllable.letters || '';
+      const stressLevel = syllable.stress_level || 0;
+
+      // Add IPA stress marker (ˈ) before stressed syllables
+      if (stressLevel === 1) {
+        stressedWord += 'ˈ' + letters;
+      } else {
+        stressedWord += letters;
+      }
+    }
+
+    return stressedWord;
+  };
+
   return (
     <div>
       <h3 className="text-xl font-bold text-white mb-4">Transcript</h3>
@@ -123,7 +144,8 @@ function Transcript({ transcript, wordList, audioData }) {
             {/* Header */}
             <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
               <div>
-                <h3 className="text-3xl font-bold text-white">{selectedWord.word}</h3>
+                <h3 className="text-3xl font-bold text-white">{getWordWithStress(selectedWord)}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Original: {selectedWord.word}</p>
                 <p className="text-sm text-slate-400 mt-1">
                   Quality Score:{' '}
                   <span className={`font-semibold ${getScoreColor(selectedWord.quality_score)}`}>
@@ -163,23 +185,33 @@ function Transcript({ transcript, wordList, audioData }) {
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables</h4>
                 <div className="flex flex-wrap gap-2">
-                  {selectedWord.syllable_score_list.map((syl, i) => (
-                    <div
-                      key={i}
-                      className={`px-3 py-2 rounded-lg border ${
-                        syl.quality_score >= 90
-                          ? 'bg-emerald-500/20 border-emerald-500/30'
-                          : syl.quality_score >= 70
-                          ? 'bg-amber-500/20 border-amber-500/30'
-                          : 'bg-red-500/20 border-red-500/30'
-                      }`}
-                    >
-                      <span className="text-white font-medium">{syl.letters}</span>
-                      <span className={`ml-2 text-sm ${getScoreColor(syl.quality_score)}`}>
-                        {formatScore(syl.quality_score)}
-                      </span>
-                    </div>
-                  ))}
+                  {selectedWord.syllable_score_list.map((syl, i) => {
+                    const isStressed = syl.stress_level === 1;
+                    const showStress = selectedWord.syllable_score_list.length >= 2;
+                    return (
+                      <div
+                        key={i}
+                        className={`px-3 py-2 rounded-lg border ${
+                          syl.quality_score >= 90
+                            ? 'bg-emerald-500/20 border-emerald-500/30'
+                            : syl.quality_score >= 70
+                            ? 'bg-amber-500/20 border-amber-500/30'
+                            : 'bg-red-500/20 border-red-500/30'
+                        }`}
+                      >
+                        <span className="text-white font-medium">
+                          {showStress && isStressed && <span className="text-blue-400">ˈ</span>}
+                          {syl.letters}
+                        </span>
+                        <span className={`ml-2 text-sm ${getScoreColor(syl.quality_score)}`}>
+                          {formatScore(syl.quality_score)}
+                        </span>
+                        {showStress && isStressed && (
+                          <span className="ml-2 text-xs text-blue-400" title="Stressed syllable">●</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

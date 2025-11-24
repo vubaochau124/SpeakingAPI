@@ -189,7 +189,7 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
       )}
 
       {/* Options */}
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className={`grid ${mode === 'scripted' ? 'md:grid-cols-1' : 'md:grid-cols-2'} gap-4`}>
         {/* Dialect Selection */}
         <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
           <label className="block text-slate-300 text-sm font-medium mb-2">🌍 Dialect</label>
@@ -219,24 +219,26 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
           </div>
         </div>
 
-        {/* Strict Mode */}
-        <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
-          <label className="block text-slate-300 text-sm font-medium mb-2">⚙️ Scoring Mode</label>
-          <button
-            onClick={() => setStrictMode(!strictMode)}
-            disabled={loading}
-            className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
-              strictMode
-                ? 'bg-orange-500 text-white'
-                : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
-            }`}
-          >
-            {strictMode ? '🎯 Strict Mode' : '📊 Default Mode'}
-          </button>
-          <p className="text-slate-500 text-xs mt-2">
-            {strictMode ? 'Stricter pronunciation scoring' : 'Standard pronunciation scoring'}
-          </p>
-        </div>
+        {/* Strict Mode - Only for unscripted mode */}
+        {mode === 'unscripted' && (
+          <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
+            <label className="block text-slate-300 text-sm font-medium mb-2">⚙️ Scoring Mode</label>
+            <button
+              onClick={() => setStrictMode(!strictMode)}
+              disabled={loading}
+              className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
+                strictMode
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
+              }`}
+            >
+              {strictMode ? '🎯 Strict Mode' : '📊 Default Mode'}
+            </button>
+            <p className="text-slate-500 text-xs mt-2">
+              {strictMode ? 'Stricter pronunciation scoring' : 'Standard pronunciation scoring'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Submit Button */}

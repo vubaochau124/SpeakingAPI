@@ -41,7 +41,6 @@ function App() {
     formData.append('audio', audioFile);
     formData.append('text', text);
     formData.append('dialect', options.dialect || 'en-us');
-    formData.append('pronunciation_score_mode', options.pronunciationScoreMode || 'default');
 
     try {
       const response = await axios.post('/api/evaluate-scripted', formData, {
@@ -321,12 +320,14 @@ function App() {
                 )}
 
                 {/* Detailed Feedback */}
-                {(unscriptedResults.speech_score?.grammar || unscriptedResults.speech_score?.vocab || unscriptedResults.speech_score?.coherence) && (
+                {(unscriptedResults.speech_score?.grammar || unscriptedResults.speech_score?.vocab || unscriptedResults.speech_score?.coherence || unscriptedResults.speech_score?.fluency) && (
                   <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                     <FeedbackDetails
                       grammar={unscriptedResults.speech_score.grammar}
                       vocab={unscriptedResults.speech_score.vocab}
                       coherence={unscriptedResults.speech_score.coherence}
+                      fluency={unscriptedResults.speech_score.fluency}
+                      wordList={unscriptedResults.speech_score.word_score_list}
                       onShowImprovement={handleShowImprovement}
                     />
                   </div>
