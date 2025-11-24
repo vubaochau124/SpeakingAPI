@@ -140,9 +140,9 @@ function FluencyDetails({ fluency }) {
             </div>
           )}
           {fluency.articulation_length && (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+            <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
               <p className="text-slate-400 text-sm">Articulation Length</p>
-              <p className="text-2xl font-bold text-emerald-400">{fluency.articulation_length.toFixed(2)}s</p>
+              <p className="text-2xl font-bold text-cyan-400">{fluency.articulation_length.toFixed(2)}s</p>
             </div>
           )}
         </div>

@@ -166,7 +166,7 @@ function Transcript({ transcript, wordList, audioData }) {
               <button
                 onClick={() => playWordAudio(selectedWord)}
                 disabled={isPlaying}
-                className="w-full mb-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full mb-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isPlaying ? (
                   <>
@@ -231,7 +231,7 @@ function Transcript({ transcript, wordList, audioData }) {
                   {selectedWord.phone_score_list.map((phone, index) => (
                     <tr key={index} className="border-b border-slate-700/50">
                       <td className="py-2 px-3">
-                        <span className="text-lg font-bold text-purple-400">
+                        <span className="text-lg font-bold text-cyan-400">
                           /{phone.phone}/
                         </span>
                       </td>

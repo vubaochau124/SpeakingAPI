@@ -67,7 +67,7 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
           disabled={disabled}
           className={`py-3 px-4 rounded-xl font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
             selectionMode === "topic"
-              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25 scale-105 focus:ring-purple-400"
+              ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25 scale-105 focus:ring-cyan-400"
               : "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white hover:scale-102 focus:ring-slate-600"
           }`}
         >
@@ -80,7 +80,7 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
           disabled={disabled}
           className={`py-3 px-4 rounded-xl font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
             selectionMode === "custom"
-              ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/25 scale-105 focus:ring-pink-400"
+              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25 scale-105 focus:ring-blue-400"
               : "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white hover:scale-102 focus:ring-slate-600"
           }`}
         >
@@ -96,7 +96,7 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
           disabled={disabled}
           className={`py-3 px-4 rounded-xl font-semibold transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
             selectionMode === "random"
-              ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25 scale-105 focus:ring-amber-400"
+              ? "bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-lg shadow-sky-500/25 scale-105 focus:ring-sky-400"
               : "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:text-white hover:scale-102 focus:ring-slate-600"
           }`}
         >
@@ -112,7 +112,7 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
             value={selectedTopic}
             onChange={(e) => handleTopicChange(e.target.value)}
             disabled={disabled}
-            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent hover:border-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">-- Select a topic --</option>
             {topics.map((topic) => (
@@ -128,7 +128,7 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
                 value={selectedQuestion}
                 onChange={(e) => setSelectedQuestion(e.target.value)}
                 disabled={disabled}
-                className="flex-1 px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent hover:border-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">-- Select a question --</option>
                 {filteredQuestions.map((q) => (
@@ -141,7 +141,7 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
                 type="button"
                 onClick={handleRandomQuestion}
                 disabled={disabled}
-                className="px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xl rounded-xl transition-all duration-300 shadow-lg shadow-amber-500/25 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-3 bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white text-xl rounded-xl transition-all duration-300 shadow-lg shadow-sky-500/25 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Random question in this topic"
               >
                 🎲
@@ -159,14 +159,14 @@ function QuestionSelector({ questions, topics, onQuestionChange, disabled }) {
           onChange={(e) => setCustomQuestion(e.target.value)}
           placeholder="Enter your custom question..."
           disabled={disabled}
-          className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent hover:border-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         />
       )}
 
       {/* Random Mode - Show selected question */}
       {selectionMode === "random" && selectedQuestion && (
-        <div className="px-4 py-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl backdrop-blur-sm">
-          <p className="text-amber-400 text-xs font-semibold mb-2 uppercase tracking-wider">
+        <div className="px-4 py-4 bg-gradient-to-br from-sky-500/10 to-cyan-500/10 border border-sky-500/30 rounded-xl backdrop-blur-sm">
+          <p className="text-sky-400 text-xs font-semibold mb-2 uppercase tracking-wider">
             📍 Topic: {selectedTopic}
           </p>
           <p className="text-white leading-relaxed">{selectedQuestion}</p>

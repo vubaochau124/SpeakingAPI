@@ -67,23 +67,14 @@ function TOEICScore({ toeicScore, title = "TOEIC Score", detectedDialect }) {
 
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-white">{title}</h2>
-          <p className="text-slate-400 text-sm mt-1">Scale: 10-200 points</p>
-          {detectedDialect && (
-            <p className="text-slate-400 text-sm mt-1">
-              🌍 Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
-            </p>
-          )}
-        </div>
-        <div className={`px-6 py-3 rounded-xl border ${getScoreBg(overall)}`}>
-          <span className="text-slate-400 text-sm mr-2">Overall</span>
-          <span className={`text-3xl font-bold ${getScoreColor(overall)}`}>
-            {formatScore(overall)}
-          </span>
-          <p className="text-xs text-slate-400 mt-1">{getScoreLevel(overall)}</p>
-        </div>
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-white">{title}</h2>
+        <p className="text-slate-400 text-sm mt-1">Scale: 10-200 points</p>
+        {detectedDialect && (
+          <p className="text-slate-400 text-sm mt-1">
+            🌍 Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

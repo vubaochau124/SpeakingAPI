@@ -105,7 +105,7 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
       {mode === 'scripted' && (
         <div>
           <label className="block text-slate-300 font-medium mb-2">
-            Text to Read <span className="text-pink-400">*</span>
+            Text to Read <span className="text-cyan-400">*</span>
           </label>
           <textarea
             value={text}
@@ -113,7 +113,7 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
             placeholder="Enter the paragraph you will read aloud..."
             disabled={loading}
             rows={4}
-            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 transition-all duration-300"
+            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent disabled:opacity-50 transition-all duration-300"
           />
         </div>
       )}
@@ -131,8 +131,8 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
       {/* Audio Input Options */}
       <div className="grid md:grid-cols-2 gap-4">
         {/* Record Audio */}
-        <div className="bg-slate-700/30 border-2 border-dashed border-slate-600 rounded-xl p-6 text-center hover:border-purple-500/50 transition-all duration-300">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+        <div className="bg-slate-700/30 border-2 border-dashed border-slate-600 rounded-xl p-6 text-center hover:border-cyan-500/50 transition-all duration-300">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full flex items-center justify-center">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
@@ -144,7 +144,7 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
             className={`font-semibold py-3 px-8 rounded-xl transition-all duration-300 ${
               isRecording
                 ? 'bg-red-500 hover:bg-red-600 animate-pulse'
-                : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
+                : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700'
             } text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
           >
             {isRecording ? '⏹ Stop Recording' : '🎙 Start Recording'}
@@ -245,7 +245,7 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
       <button
         onClick={handleSubmit}
         disabled={!hasAudio || loading || (mode === 'scripted' && !text.trim())}
-        className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-emerald-500/25"
+        className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-cyan-500/25"
       >
         {buttonText}
       </button>

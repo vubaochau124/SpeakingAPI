@@ -10,7 +10,7 @@ function Relevance({ relevance, scoreIssueList }) {
         <div className="mb-6 p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
           <div className="flex items-center justify-between mb-3">
             <span className="text-slate-300 font-medium">Relevance Score</span>
-            <span className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
               {relevance.class}
             </span>
           </div>

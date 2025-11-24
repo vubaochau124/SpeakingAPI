@@ -1,10 +1,29 @@
 function ScoreSelector({ activeSystem, onSystemChange, availableSystems }) {
   const systems = [
-    { id: 'ielts', name: 'IELTS', color: 'from-purple-500 to-pink-500', available: availableSystems?.ielts },
-    { id: 'pte', name: 'PTE', color: 'from-blue-500 to-cyan-500', available: availableSystems?.pte },
-    { id: 'toeic', name: 'TOEIC', color: 'from-green-500 to-emerald-500', available: availableSystems?.toeic },
-    { id: 'cefr', name: 'CEFR', color: 'from-yellow-500 to-orange-500', available: availableSystems?.cefr },
-    { id: 'speechace', name: 'SpeechAce', color: 'from-indigo-500 to-purple-500', available: availableSystems?.speechace }
+    {
+      id: "ielts",
+      name: "IELTS",
+      color: "from-cyan-500 to-blue-600",
+      available: availableSystems?.ielts,
+    },
+    {
+      id: "pte",
+      name: "PTE",
+      color: "from-blue-500 to-cyan-500",
+      available: availableSystems?.pte,
+    },
+    {
+      id: "toeic",
+      name: "TOEIC",
+      color: "from-teal-500 to-cyan-500",
+      available: availableSystems?.toeic,
+    },
+    {
+      id: "cefr",
+      name: "CEFR",
+      color: "from-sky-500 to-blue-500",
+      available: availableSystems?.cefr,
+    },
   ];
 
   return (
@@ -14,7 +33,7 @@ function ScoreSelector({ activeSystem, onSystemChange, availableSystems }) {
         <h3 className="text-white font-semibold">Scoring System</h3>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {systems.map((system) => {
           const isActive = activeSystem === system.id;
           const isAvailable = system.available !== false;
@@ -26,11 +45,12 @@ function ScoreSelector({ activeSystem, onSystemChange, availableSystems }) {
               disabled={!isAvailable}
               className={`
                 relative p-4 rounded-xl font-semibold transition-all duration-300
-                ${isActive
-                  ? `bg-gradient-to-r ${system.color} text-white shadow-lg scale-105`
-                  : isAvailable
-                    ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:scale-102'
-                    : 'bg-slate-800/30 text-slate-600 cursor-not-allowed opacity-50'
+                ${
+                  isActive
+                    ? `bg-gradient-to-r ${system.color} text-white shadow-lg scale-105`
+                    : isAvailable
+                    ? "bg-slate-700/50 text-slate-300 hover:bg-slate-700 hover:scale-102"
+                    : "bg-slate-800/30 text-slate-600 cursor-not-allowed opacity-50"
                 }
               `}
             >

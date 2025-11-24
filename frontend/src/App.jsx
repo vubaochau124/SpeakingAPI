@@ -7,7 +7,6 @@ import IELTSScore from './components/IELTSScore';
 import PTEScore from './components/PTEScore';
 import TOEICScore from './components/TOEICScore';
 import CEFRScore from './components/CEFRScore';
-import SpeechAceScore from './components/SpeechAceScore';
 import FeedbackDetails from './components/FeedbackDetails';
 import ScoreSelector from './components/ScoreSelector';
 import axios from 'axios';
@@ -120,11 +119,11 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent mb-3">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-sky-400 bg-clip-text text-transparent mb-3">
             Speech Evaluation
           </h1>
           <p className="text-slate-400 text-lg">IELTS Speaking Practice & Assessment</p>
@@ -136,7 +135,7 @@ function App() {
             onClick={() => setActiveTab('scripted')}
             className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
               activeTab === 'scripted'
-                ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-purple-500/25'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             }`}
           >
@@ -152,7 +151,7 @@ function App() {
             onClick={() => setActiveTab('unscripted')}
             className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
               activeTab === 'unscripted'
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-pink-500/25'
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             }`}
           >
@@ -172,7 +171,7 @@ function App() {
             {!scriptedResults ? (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-700/50">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center">
                     <span className="text-white font-bold">1</span>
                   </div>
                   <div>
@@ -202,8 +201,7 @@ function App() {
                     ielts: !!scriptedResults.text_score?.ielts_score,
                     pte: !!scriptedResults.text_score?.pte_score,
                     toeic: !!scriptedResults.text_score?.toeic_score,
-                    cefr: !!scriptedResults.text_score?.cefr_score,
-                    speechace: !!scriptedResults.text_score?.speechace_score
+                    cefr: !!scriptedResults.text_score?.cefr_score
                   }}
                 />
 
@@ -236,13 +234,6 @@ function App() {
                     detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
                   />
                 )}
-                {scoringSystem === 'speechace' && scriptedResults.text_score?.speechace_score && (
-                  <SpeechAceScore
-                    speechaceScore={scriptedResults.text_score.speechace_score}
-                    title="Part 1 Score (SpeechAce)"
-                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
-                  />
-                )}
 
                 {/* Audio & Transcript */}
                 <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
@@ -262,59 +253,156 @@ function App() {
 
                 {/* Fluency Details for Part 1 */}
                 {scriptedResults.text_score?.fluency?.overall_metrics && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                      <span>🗣️</span> Fluency Analysis
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-                        <p className="text-slate-400 text-sm mb-1">Speech Rate</p>
-                        <p className="text-2xl font-bold text-white">
-                          {scriptedResults.text_score.fluency.overall_metrics.speech_rate?.toFixed(2)}
-                          <span className="text-sm text-slate-400 ml-1">words/sec</span>
-                        </p>
+                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50 space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
+                        🗣️
                       </div>
-                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-                        <p className="text-slate-400 text-sm mb-1">Articulation Rate</p>
-                        <p className="text-2xl font-bold text-white">
-                          {scriptedResults.text_score.fluency.overall_metrics.articulation_rate?.toFixed(2)}
-                          <span className="text-sm text-slate-400 ml-1">syl/sec</span>
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-                        <p className="text-slate-400 text-sm mb-1">Syllables Per Min</p>
-                        <p className="text-2xl font-bold text-white">
-                          {scriptedResults.text_score.fluency.overall_metrics.syllable_correct_per_minute?.toFixed(0)}
-                          <span className="text-sm text-slate-400 ml-1">spm</span>
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-                        <p className="text-slate-400 text-sm mb-1">Words Per Min</p>
-                        <p className="text-2xl font-bold text-white">
-                          {scriptedResults.text_score.fluency.overall_metrics.word_correct_per_minute?.toFixed(0)}
-                          <span className="text-sm text-slate-400 ml-1">wpm</span>
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-                        <p className="text-slate-400 text-sm mb-1">Pause Count</p>
-                        <p className="text-2xl font-bold text-amber-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_count || 0}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-                        <p className="text-slate-400 text-sm mb-1">Pause Duration</p>
-                        <p className="text-2xl font-bold text-amber-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_duration?.toFixed(2) || '0.00'}
-                          <span className="text-sm text-slate-400 ml-1">sec</span>
-                        </p>
+                      <div>
+                        <h3 className="text-2xl font-bold text-white">Fluency Analysis</h3>
+                        <p className="text-slate-400 text-sm">Speech rate and pause metrics</p>
                       </div>
                     </div>
+
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {/* Speech Rate */}
+                      <div className="group p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">🚀</span>
+                          <p className="text-slate-300 text-sm font-medium">Speech Rate</p>
+                        </div>
+                        <p className="text-3xl font-bold text-emerald-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.speech_rate?.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">words/second</p>
+                      </div>
+
+                      {/* Articulation Rate */}
+                      <div className="group p-5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">💬</span>
+                          <p className="text-slate-300 text-sm font-medium">Articulation Rate</p>
+                        </div>
+                        <p className="text-3xl font-bold text-cyan-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.articulation_rate?.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">syllables/second</p>
+                      </div>
+
+                      {/* Syllables Per Min */}
+                      <div className="group p-5 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">📊</span>
+                          <p className="text-slate-300 text-sm font-medium">Syllables Per Min</p>
+                        </div>
+                        <p className="text-3xl font-bold text-blue-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.syllable_correct_per_minute?.toFixed(0)}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">correct spm</p>
+                      </div>
+
+                      {/* Words Per Min */}
+                      <div className="group p-5 rounded-xl bg-sky-500/10 border border-sky-500/30 hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">⏱️</span>
+                          <p className="text-slate-300 text-sm font-medium">Words Per Min</p>
+                        </div>
+                        <p className="text-3xl font-bold text-sky-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.word_correct_per_minute?.toFixed(0)}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">correct wpm</p>
+                      </div>
+
+                      {/* Pause Count */}
+                      <div className="group p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">⏸️</span>
+                          <p className="text-slate-300 text-sm font-medium">Pause Count</p>
+                        </div>
+                        <p className="text-3xl font-bold text-amber-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_count || 0}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">total pauses</p>
+                      </div>
+
+                      {/* Pause Duration */}
+                      <div className="group p-5 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:scale-[1.02] transition-all duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">⏳</span>
+                          <p className="text-slate-300 text-sm font-medium">Pause Duration</p>
+                        </div>
+                        <p className="text-3xl font-bold text-orange-400">
+                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_duration?.toFixed(2) || '0.00'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">total seconds</p>
+                      </div>
+                    </div>
+
+                    {/* Notable Pauses */}
+                    {scriptedResults.text_score.fluency.overall_metrics.all_pause_list && (() => {
+                      const notablePauses = scriptedResults.text_score.fluency.overall_metrics.all_pause_list.filter(pause => {
+                        const duration = (pause[1] - pause[0]) / 100;
+                        return duration > 0.3;
+                      });
+
+                      return notablePauses.length > 0 && (
+                        <div className="bg-slate-800/30 rounded-xl border border-slate-700/50 overflow-hidden">
+                          <button
+                            onClick={() => {
+                              const el = document.getElementById('scripted-pauses');
+                              if (el) el.classList.toggle('hidden');
+                            }}
+                            className="w-full flex items-center justify-between p-5 hover:bg-slate-700/30 transition-all duration-300 group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:bg-cyan-500/20">
+                                <span className="text-xl">📁</span>
+                              </div>
+                              <div className="text-left">
+                                <h4 className="text-lg font-bold text-white">Notable Pauses</h4>
+                                <p className="text-sm text-slate-400">
+                                  {notablePauses.length} pauses longer than 0.3s detected
+                                </p>
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+
+                          <div id="scripted-pauses" className="hidden p-5 pt-0 space-y-3 max-h-96 overflow-y-auto">
+                            {notablePauses.map((pause, idx) => {
+                              const pauseStart = pause[0];
+                              const pauseEnd = pause[1];
+                              const duration = ((pauseEnd - pauseStart) / 100).toFixed(2);
+
+                              return (
+                                <div key={idx} className="group p-4 rounded-lg bg-gradient-to-r from-slate-700/30 to-slate-700/10 border border-slate-600/30 hover:border-cyan-500/30 hover:from-cyan-500/5 hover:to-blue-500/5 transition-all duration-300">
+                                  <div className="flex items-center gap-3 mb-3">
+                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold text-sm">
+                                      {idx + 1}
+                                    </div>
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
+                                      <span className="text-cyan-400 font-bold text-base">⏸</span>
+                                      <span className="text-cyan-300 font-bold">{duration}s</span>
+                                    </div>
+                                    <span className="text-slate-400 text-sm">pause detected</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
                 <button
                   onClick={resetScripted}
-                  className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-purple-500/25"
+                  className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-cyan-500/25"
                 >
                   Try Again
                 </button>
@@ -323,7 +411,7 @@ function App() {
 
             {scriptedLoading && (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-cyan-500 border-t-transparent"></div>
                 <p className="mt-4 text-slate-300">Analyzing your speech...</p>
               </div>
             )}
@@ -336,7 +424,7 @@ function App() {
             {!unscriptedResults ? (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-700/50">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
                     <span className="text-white font-bold">2</span>
                   </div>
                   <div>
@@ -368,8 +456,7 @@ function App() {
                     ielts: !!unscriptedResults.speech_score?.ielts_score,
                     pte: !!unscriptedResults.speech_score?.pte_score,
                     toeic: !!unscriptedResults.speech_score?.toeic_score,
-                    cefr: !!unscriptedResults.speech_score?.cefr_score,
-                    speechace: !!unscriptedResults.speech_score?.speechace_score
+                    cefr: !!unscriptedResults.speech_score?.cefr_score
                   }}
                 />
 
@@ -399,13 +486,6 @@ function App() {
                   <CEFRScore
                     cefrScore={unscriptedResults.speech_score.cefr_score}
                     title="Part 2 Level (CEFR)"
-                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'speechace' && unscriptedResults.speech_score?.speechace_score && (
-                  <SpeechAceScore
-                    speechaceScore={unscriptedResults.speech_score.speechace_score}
-                    title="Part 2 Score (SpeechAce)"
                     detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
                   />
                 )}
@@ -480,7 +560,7 @@ function App() {
 
                 <button
                   onClick={resetUnscripted}
-                  className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-pink-500/25"
+                  className="w-full py-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/25"
                 >
                   Try Again
                 </button>
@@ -489,7 +569,7 @@ function App() {
 
             {unscriptedLoading && (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-pink-500 border-t-transparent"></div>
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
                 <p className="mt-4 text-slate-300">Analyzing your speech...</p>
               </div>
             )}
