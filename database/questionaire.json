@@ -1,0 +1,254 @@
+{
+  "speaking_test_questions": [
+    {
+      "id": 1,
+      "topic": "Work Experience and Background",
+      "question": "Could you describe your typical responsibilities in your last role?"
+    },
+    {
+      "id": 2,
+      "topic": "Work Experience and Background",
+      "question": "What is the most challenging project you have worked on, and how did you handle it?"
+    },
+    {
+      "id": 3,
+      "topic": "Work Experience and Background",
+      "question": "Why are you interested in a role that requires strong English communication skills?"
+    },
+    {
+      "id": 4,
+      "topic": "Work Experience and Background",
+      "question": "How do you keep your professional skills up-to-date?"
+    },
+    {
+      "id": 5,
+      "topic": "Work Experience and Background",
+      "question": "What kind of work environment do you thrive in?"
+    },
+    {
+      "id": 6,
+      "topic": "Work Experience and Background",
+      "question": "Can you share a situation where your attention to detail made a difference?"
+    },
+    {
+      "id": 7,
+      "topic": "Work Experience and Background",
+      "question": "What is your proudest professional achievement so far?"
+    },
+    {
+      "id": 8,
+      "topic": "Work Experience and Background",
+      "question": "How do you manage your time when you have multiple deadlines approaching?"
+    },
+    {
+      "id": 9,
+      "topic": "Work Experience and Background",
+      "question": "What software or tools do you use regularly in your job, and how proficient are you with them?"
+    },
+    {
+      "id": 10,
+      "topic": "Work Experience and Background",
+      "question": "Describe a conflict with a colleague and how you resolved it."
+    },
+    {
+      "id": 11,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "How would you explain a complex technical concept to a non-technical audience?"
+    },
+    {
+      "id": 12,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "In your opinion, what makes a business email effective?"
+    },
+    {
+      "id": 13,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "Describe a time you had to give constructive feedback to a team member."
+    },
+    {
+      "id": 14,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "How do you prepare for an important business presentation?"
+    },
+    {
+      "id": 15,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "Imagine you are running a meeting. What steps do you take to ensure everyone participates?"
+    },
+    {
+      "id": 16,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "How do you handle interruptions during a phone call or meeting?"
+    },
+    {
+      "id": 17,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "What is your strategy for communicating with remote team members?"
+    },
+    {
+      "id": 18,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "Describe a successful negotiation you were involved in."
+    },
+    {
+      "id": 19,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "How do you ensure clarity when giving instructions or delegating tasks?"
+    },
+    {
+      "id": 20,
+      "topic": "Communication and Interpersonal Skills",
+      "question": "Talk about a misunderstanding that occurred at work and what you learned from it."
+    },
+    {
+      "id": 21,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "Tell us about a time you had to make a quick decision under pressure."
+    },
+    {
+      "id": 22,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "What steps do you follow when analyzing a business problem?"
+    },
+    {
+      "id": 23,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "How do you handle a situation where a key process or system fails?"
+    },
+    {
+      "id": 24,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "Describe a mistake you made at work and what actions you took afterward."
+    },
+    {
+      "id": 25,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "How do you prioritize competing demands or tasks when everything seems urgent?"
+    },
+    {
+      "id": 26,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "What role does data play in your decision-making process?"
+    },
+    {
+      "id": 27,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "Give an example of a creative solution you implemented to solve a recurring issue."
+    },
+    {
+      "id": 28,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "How do you deal with ambiguity or incomplete information when starting a new task?"
+    },
+    {
+      "id": 29,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "What is your approach to dealing with an angry or dissatisfied client/customer?"
+    },
+    {
+      "id": 30,
+      "topic": "Problem-Solving and Decision Making",
+      "question": "How do you measure the success of a solution you’ve implemented?"
+    },
+    {
+      "id": 31,
+      "topic": "Office Environment and Professionalism",
+      "question": "How do you maintain a professional demeanor when dealing with difficult situations?"
+    },
+    {
+      "id": 32,
+      "topic": "Office Environment and Professionalism",
+      "question": "What are your views on workplace ethics and professionalism?"
+    },
+    {
+      "id": 33,
+      "topic": "Office Environment and Professionalism",
+      "question": "Describe your ideal working hours and why."
+    },
+    {
+      "id": 34,
+      "topic": "Office Environment and Professionalism",
+      "question": "How do you separate your work life from your personal life?"
+    },
+    {
+      "id": 35,
+      "topic": "Office Environment and Professionalism",
+      "question": "What do you think is the role of office small talk or casual conversation?"
+    },
+    {
+      "id": 36,
+      "topic": "Office Environment and Professionalism",
+      "question": "How do you handle constructive criticism from your manager or peers?"
+    },
+    {
+      "id": 37,
+      "topic": "Office Environment and Professionalism",
+      "question": "What does 'professional appearance' mean to you in the context of an office job?"
+    },
+    {
+      "id": 38,
+      "topic": "Office Environment and Professionalism",
+      "question": "How do you stay motivated during repetitive or less interesting tasks?"
+    },
+    {
+      "id": 39,
+      "topic": "Office Environment and Professionalism",
+      "question": "Describe a situation where you had to adapt quickly to a change in company policy."
+    },
+    {
+      "id": 40,
+      "topic": "Office Environment and Professionalism",
+      "question": "How important is teamwork to you, and how do you contribute to it?"
+    },
+    {
+      "id": 41,
+      "topic": "General Business and Future Goals",
+      "question": "Where do you see yourself professionally in the next five years?"
+    },
+    {
+      "id": 42,
+      "topic": "General Business and Future Goals",
+      "question": "What recent news or trends in your industry have caught your attention?"
+    },
+    {
+      "id": 43,
+      "topic": "General Business and Future Goals",
+      "question": "How do you define success in your career?"
+    },
+    {
+      "id": 44,
+      "topic": "General Business and Future Goals",
+      "question": "What are the biggest challenges facing modern office workers today?"
+    },
+    {
+      "id": 45,
+      "topic": "General Business and Future Goals",
+      "question": "If you could start your career over, what would you do differently?"
+    },
+    {
+      "id": 46,
+      "topic": "General Business and Future Goals",
+      "question": "Why do you think international business communication is important?"
+    },
+    {
+      "id": 47,
+      "topic": "General Business and Future Goals",
+      "question": "How do you handle failure or disappointment at work?"
+    },
+    {
+      "id": 48,
+      "topic": "General Business and Future Goals",
+      "question": "What is one thing about this company/industry that genuinely excites you?"
+    },
+    {
+      "id": 49,
+      "topic": "General Business and Future Goals",
+      "question": "Describe a new skill you plan to learn in the near future."
+    },
+    {
+      "id": 50,
+      "topic": "General Business and Future Goals",
+      "question": "What are the qualities of a good leader in an office setting?"
+    }
+  ]
+}
