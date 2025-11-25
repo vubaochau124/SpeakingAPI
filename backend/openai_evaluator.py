@@ -70,9 +70,6 @@ class OpenAIEvaluator:
         improved_answer = self._generate_improved_answer(transcript, question, result)
         result['improved_answer'] = improved_answer
 
-        # Step 3: Calculate overall OpenAI score
-        result['openai_overall_score'] = self._calculate_overall_score(result)
-
         return result
 
     def _generate_improved_answer(self, original_transcript, question, evaluation):
@@ -143,85 +140,6 @@ GUIDELINES:
 
         return json.loads(response.choices[0].message.content)
 
-    def _calculate_overall_score(self, evaluation):
-        """Calculate overall OpenAI score from evaluation metrics
-
-        Args:
-            evaluation (dict): Evaluation results
-
-        Returns:
-            dict: Overall scores including total score out of 100
-        """
-        scores = {
-            'grammar_score': 0,
-            'vocab_score': 0,
-            'coherence_score': 0,
-            'total_score': 0,
-            'grade': ''
-        }
-
-        # Extract scores from evaluation
-        grammar_metrics = evaluation.get('grammar', {}).get('overall_metrics', {})
-        vocab_metrics = evaluation.get('vocab', {}).get('overall_metrics', {})
-        coherence_metrics = evaluation.get('coherence', {}).get('overall_metrics', {})
-
-        # Calculate grammar score (average of all grammar metrics)
-        grammar_scores = [
-            grammar_metrics.get('grammatical_accuracy', {}).get('score', 0),
-            grammar_metrics.get('grammatical_range', {}).get('score', 0)
-        ]
-        scores['grammar_score'] = sum(grammar_scores) / len(grammar_scores) if grammar_scores else 0
-
-        # Calculate vocab score (average of vocab metrics)
-        vocab_scores = [
-            vocab_metrics.get('lexical_diversity', {}).get('score', 0),
-            vocab_metrics.get('word_sophistication', {}).get('score', 0),
-            vocab_metrics.get('word_specificity', {}).get('score', 0),
-            vocab_metrics.get('academic_language_use', {}).get('score', 0)
-        ]
-        scores['vocab_score'] = sum(vocab_scores) / len(vocab_scores) if vocab_scores else 0
-
-        # Calculate coherence score (average of coherence metrics)
-        coherence_scores = [
-            coherence_metrics.get('lexical_density', {}).get('score', 0),
-            coherence_metrics.get('basic_connectives', {}).get('score', 0),
-            coherence_metrics.get('causal_connectives', {}).get('score', 0)
-        ]
-        scores['coherence_score'] = sum(coherence_scores) / len(coherence_scores) if coherence_scores else 0
-
-        # Calculate total score (weighted average)
-        scores['total_score'] = round(
-            (scores['grammar_score'] * 0.4 +
-             scores['vocab_score'] * 0.3 +
-             scores['coherence_score'] * 0.3),
-            2
-        )
-
-        # Assign grade
-        total = scores['total_score']
-        if total >= 90:
-            scores['grade'] = 'A+'
-        elif total >= 85:
-            scores['grade'] = 'A'
-        elif total >= 80:
-            scores['grade'] = 'A-'
-        elif total >= 75:
-            scores['grade'] = 'B+'
-        elif total >= 70:
-            scores['grade'] = 'B'
-        elif total >= 65:
-            scores['grade'] = 'B-'
-        elif total >= 60:
-            scores['grade'] = 'C+'
-        elif total >= 55:
-            scores['grade'] = 'C'
-        elif total >= 50:
-            scores['grade'] = 'C-'
-        else:
-            scores['grade'] = 'D'
-
-        return scores
-
     def _build_enhancement_prompt(self, transcript, question=None):
         """Build comprehensive evaluation prompt for OpenAI"""
 
@@ -240,16 +158,6 @@ Return a JSON object with this EXACT structure:
 {
   "grammar": {
     "overall_metrics": {
-      "length": {
-        "score": <integer 0-100>,
-        "level": "<low|mid|high>",
-        "message": "<assessment of response length adequacy and detail>"
-      },
-      "lexical_diversity": {
-        "score": <integer 0-100>,
-        "level": "<low|mid|high>",
-        "message": "<analysis of vocabulary variety used>"
-      },
       "grammatical_accuracy": {
         "score": <integer 0-100>,
         "level": "<low|mid|high>",
@@ -298,15 +206,25 @@ Return a JSON object with this EXACT structure:
         "level": "<low|mid|high>",
         "message": "<natural word combinations and collocations>"
       },
-      "idiomaticity": {
+      "adverb_diversity": {
         "score": <integer 0-100>,
         "level": "<low|mid|high>",
-        "message": "<use of idiomatic expressions>"
+        "message": "<variety and appropriate use of adverbs>"
+      },
+      "verb_diversity": {
+        "score": <integer 0-100>,
+        "level": "<low|mid|high>",
+        "message": "<variety of verbs beyond basic ones>"
       }
     }
   },
   "coherence": {
     "overall_metrics": {
+      "length": {
+        "score": <integer 0-100>,
+        "level": "<low|mid|high>",
+        "message": "<assessment of response length adequacy and detail>"
+      },
       "lexical_density": {
         "score": <integer 0-100>,
         "level": "<low|mid|high>",
@@ -326,16 +244,6 @@ Return a JSON object with this EXACT structure:
         "score": <integer 0-100>,
         "level": "<low|mid|high>",
         "message": "<use of however, although, despite, nevertheless>"
-      },
-      "adverb_diversity": {
-        "score": <integer 0-100>,
-        "level": "<low|mid|high>",
-        "message": "<variety and appropriate use of adverbs>"
-      },
-      "verb_diversity": {
-        "score": <integer 0-100>,
-        "level": "<low|mid|high>",
-        "message": "<variety of verbs beyond basic ones>"
       }
     }
   },
@@ -382,16 +290,16 @@ EVALUATION INSTRUCTIONS:
 3. Word specificity: Flag vague words (thing, stuff, get, do, nice)
 4. Academic language: Formal register, nominalizations, precision
 5. Collocations: Check for natural word pairings
-6. Idiomaticity: Note idiomatic expressions used appropriately
-
-**COHERENCE ANALYSIS:**
-1. Lexical density: Ratio of content words (nouns, verbs, adjectives, adverbs) to total words
-2. Basic connectives: Count and, but, or, so
-3. Causal connectives: Count because, therefore, thus, consequently, as a result
-4. Negative connectives: Count however, although, despite, nevertheless, whereas
-5. Discourse structure: Topic development, logical flow, paragraph organization
 6. Adverb diversity: Variety beyond simple time/place adverbs
 7. Verb diversity: Use of varied verbs beyond be/have/do/make/get
+
+**COHERENCE ANALYSIS:**
+1. Response length: Assessment of response length adequacy and detail
+2. Lexical density: Ratio of content words (nouns, verbs, adjectives, adverbs) to total words
+3. Basic connectives: Count and, but, or, so
+4. Causal connectives: Count because, therefore, thus, consequently, as a result
+5. Negative connectives: Count however, although, despite, nevertheless, whereas
+6. Discourse structure: Topic development, logical flow, paragraph organization
 
 **IELTS SCORING (0-9 scale):**
 - 9: Expert command

@@ -10,6 +10,7 @@ function FeedbackDetails({
 }) {
   const [activeTab, setActiveTab] = useState("grammar");
   const [showNotablePauses, setShowNotablePauses] = useState(false);
+  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 
   const getLevelColor = (level) => {
     if (level === "high")
@@ -106,11 +107,6 @@ function FeedbackDetails({
 
   const grammarMetrics = grammar?.overall_metrics
     ? [
-        { name: "Response Length", ...grammar.overall_metrics.length },
-        {
-          name: "Lexical Diversity",
-          ...grammar.overall_metrics.lexical_diversity,
-        },
         {
           name: "Grammatical Accuracy",
           ...grammar.overall_metrics.grammatical_accuracy,
@@ -122,52 +118,52 @@ function FeedbackDetails({
       ].filter((m) => m.score !== undefined)
     : [];
 
-  const vocabMetrics = vocab?.overall_metrics
+  const vocabMetrics = vocab?.overall_metrics || coherence?.overall_metrics
     ? [
         {
           name: "Lexical Diversity",
-          ...vocab.overall_metrics.lexical_diversity,
+          ...(vocab?.overall_metrics?.lexical_diversity || {}),
         },
         {
           name: "Word Sophistication",
-          ...vocab.overall_metrics.word_sophistication,
+          ...(vocab?.overall_metrics?.word_sophistication || {}),
         },
-        { name: "Word Specificity", ...vocab.overall_metrics.word_specificity },
+        { name: "Word Specificity", ...(vocab?.overall_metrics?.word_specificity || {}) },
         {
           name: "Academic Language Use",
-          ...vocab.overall_metrics.academic_language_use,
+          ...(vocab?.overall_metrics?.academic_language_use || {}),
         },
         {
           name: "Collocation Commonality",
-          ...vocab.overall_metrics.collocation_commonality,
-        },
-        { name: "Idiomaticity", ...vocab.overall_metrics.idiomaticity },
-      ].filter((m) => m.score !== undefined)
-    : [];
-
-  const coherenceMetrics = coherence?.overall_metrics
-    ? [
-        {
-          name: "Lexical Density",
-          ...coherence.overall_metrics.lexical_density,
-        },
-        {
-          name: "Basic Connectives",
-          ...coherence.overall_metrics.basic_connectives,
-        },
-        {
-          name: "Causal Connectives",
-          ...coherence.overall_metrics.causal_connectives,
-        },
-        {
-          name: "Negative Connectives",
-          ...coherence.overall_metrics.negative_connectives,
+          ...(vocab?.overall_metrics?.collocation_commonality || {}),
         },
         {
           name: "Adverb Diversity",
-          ...coherence.overall_metrics.adverb_diversity,
+          ...(coherence?.overall_metrics?.adverb_diversity || {}),
         },
-        { name: "Verb Diversity", ...coherence.overall_metrics.verb_diversity },
+        { name: "Verb Diversity", ...(coherence?.overall_metrics?.verb_diversity || {}) },
+      ].filter((m) => m.score !== undefined)
+    : [];
+
+  const coherenceMetrics = coherence?.overall_metrics || grammar?.overall_metrics
+    ? [
+        { name: "Response Length", ...(grammar?.overall_metrics?.length || {}) },
+        {
+          name: "Lexical Density",
+          ...(coherence?.overall_metrics?.lexical_density || {}),
+        },
+        {
+          name: "Basic Connectives",
+          ...(coherence?.overall_metrics?.basic_connectives || {}),
+        },
+        {
+          name: "Causal Connectives",
+          ...(coherence?.overall_metrics?.causal_connectives || {}),
+        },
+        {
+          name: "Negative Connectives",
+          ...(coherence?.overall_metrics?.negative_connectives || {}),
+        },
       ].filter((m) => m.score !== undefined)
     : [];
 
@@ -318,8 +314,27 @@ function FeedbackDetails({
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
           📊
         </div>
-        <div>
-          <h3 className="text-2xl font-bold text-white">Detailed Feedback</h3>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-2xl font-bold text-white">Detailed Feedback</h3>
+            <div className="relative">
+              <button
+                onClick={() => setShowInfoTooltip(!showInfoTooltip)}
+                onBlur={() => setTimeout(() => setShowInfoTooltip(false), 150)}
+                className="w-6 h-6 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-600 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200 text-sm font-medium"
+              >
+                i
+              </button>
+              {showInfoTooltip && (
+                <div className="absolute left-0 top-8 z-50 w-72 p-4 bg-slate-800 border border-slate-600 rounded-xl shadow-xl text-sm">
+                  <p className="text-slate-300 leading-relaxed">
+                    These metrics evaluate your speech across Grammar, Vocabulary, Coherence, and Fluency. Scores range from 0-10, with higher scores indicating better performance.
+                  </p>
+                  <div className="absolute -top-2 left-2 w-3 h-3 bg-slate-800 border-l border-t border-slate-600 transform rotate-45"></div>
+                </div>
+              )}
+            </div>
+          </div>
           <p className="text-slate-400 text-sm">
             Comprehensive analysis across all categories
           </p>
