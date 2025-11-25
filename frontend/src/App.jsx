@@ -9,6 +9,7 @@ import TOEICScore from './components/TOEICScore';
 import CEFRScore from './components/CEFRScore';
 import FeedbackDetails from './components/FeedbackDetails';
 import ScoreSelector from './components/ScoreSelector';
+import ImprovedAnswer from './components/ImprovedAnswer';
 import axios from 'axios';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
   const [unscriptedLoading, setUnscriptedLoading] = useState(false);
   const [unscriptedError, setUnscriptedError] = useState(null);
   const [hasQuestion, setHasQuestion] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState('');
   const [showImprovedTranscript, setShowImprovedTranscript] = useState(false);
   const [scoringSystem, setScoringSystem] = useState('ielts');
 
@@ -63,6 +65,7 @@ function App() {
     setUnscriptedLoading(true);
     setUnscriptedError(null);
     setHasQuestion(!!question.trim());
+    setCurrentQuestion(question.trim());
 
     const formData = new FormData();
     formData.append('audio', audioFile);
@@ -92,6 +95,8 @@ function App() {
   const resetUnscripted = () => {
     setUnscriptedResults(null);
     setUnscriptedError(null);
+    setCurrentQuestion('');
+    setHasQuestion(false);
     setShowImprovedTranscript(false);
   };
 
@@ -448,6 +453,21 @@ function App() {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Question Display */}
+                {currentQuestion && (
+                  <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                        <span className="text-2xl">❓</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-white mb-2">Question</h3>
+                        <p className="text-slate-200 leading-relaxed">{currentQuestion}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Score Selector */}
                 <ScoreSelector
                   activeSystem={scoringSystem}
@@ -510,22 +530,6 @@ function App() {
                 {/* Transcript */}
                 {unscriptedResults.speech_score?.transcript && (
                   <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                    {showImprovedTranscript ? (
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                            <span>✨</span> Improved Transcript
-                          </h3>
-                          <button
-                            onClick={() => setShowImprovedTranscript(false)}
-                            className="text-sm text-slate-400 hover:text-white"
-                          >
-                            Show Original
-                          </button>
-                        </div>
-                        <p className="text-emerald-300 leading-relaxed">{getImprovedTranscript()}</p>
-                      </div>
-                    ) : (
                       <>
                         {unscriptedResults.speech_score?.word_score_list ? (
                           <Transcript
@@ -540,7 +544,6 @@ function App() {
                           </div>
                         )}
                       </>
-                    )}
                   </div>
                 )}
 
@@ -554,6 +557,16 @@ function App() {
                       fluency={unscriptedResults.speech_score.fluency}
                       wordList={unscriptedResults.speech_score.word_score_list}
                       onShowImprovement={handleShowImprovement}
+                    />
+                  </div>
+                )}
+
+                {/* Improved Answer Suggestion */}
+                {unscriptedResults.speech_score?.improved_answer && (
+                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+                    <ImprovedAnswer
+                      improvedAnswerData={unscriptedResults.speech_score.improved_answer}
+                      originalTranscript={unscriptedResults.speech_score.transcript}
                     />
                   </div>
                 )}

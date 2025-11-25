@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 function Transcript({ transcript, wordList, audioData }) {
   const [selectedWord, setSelectedWord] = useState(null);
@@ -131,16 +132,16 @@ function Transcript({ transcript, wordList, audioData }) {
       </div>
 
       {/* Popup Modal */}
-      {selectedWord && (
+      {selectedWord && createPortal(
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9998]"
             onClick={() => setSelectedWord(null)}
           />
 
-          {/* Popup */}
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-800 rounded-2xl shadow-2xl p-6 z-50 max-w-md w-full mx-4 border border-slate-700">
+          {/* Popup - Centered and on top */}
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-800 rounded-2xl shadow-2xl p-6 z-[9999] max-w-md w-full mx-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
               <div>
@@ -251,7 +252,8 @@ function Transcript({ transcript, wordList, audioData }) {
               </table>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

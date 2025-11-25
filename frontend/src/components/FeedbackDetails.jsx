@@ -617,7 +617,7 @@ function FeedbackDetails({
                   ))}
                 </div>
 
-                {onShowImprovement && (
+                {/* {onShowImprovement && (
                   <button
                     onClick={() => onShowImprovement(grammarErrors)}
                     className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-cyan-500/25 hover:scale-[1.02] flex items-center justify-center gap-2"
@@ -625,7 +625,7 @@ function FeedbackDetails({
                     <span className="text-xl">✨</span>
                     <span>Show All Improvements in Transcript</span>
                   </button>
-                )}
+                )} */}
               </>
             ) : (
               <div className="text-center py-16 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-xl border border-emerald-500/30">

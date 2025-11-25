@@ -5,18 +5,19 @@ function Relevance({ relevance, scoreIssueList }) {
         <span>🎯</span> Relevance Analysis
       </h3>
 
-      {/* Relevance Score */}
+      {/* Relevance Assessment */}
       {relevance && (
-        <div className="mb-6 p-4 rounded-xl bg-slate-700/30 border border-slate-600/30">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-slate-300 font-medium">Relevance Score</span>
-            <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              {relevance.class}
-            </span>
+        <div className="mb-6 p-6 rounded-xl bg-gradient-to-br from-slate-700/40 to-slate-800/40 border border-slate-600/30 shadow-lg">
+          <div className="flex items-start gap-4">
+            <div className="flex-1">
+              <div className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-2">
+                {relevance.class}
+              </div>
+              {relevance.explanation && (
+                <p className="text-slate-300 leading-relaxed">{relevance.explanation}</p>
+              )}
+            </div>
           </div>
-          {relevance.explanation && (
-            <p className="text-slate-400 text-sm leading-relaxed">{relevance.explanation}</p>
-          )}
         </div>
       )}
 
