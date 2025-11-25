@@ -12,6 +12,37 @@ function FeedbackDetails({
   const [showNotablePauses, setShowNotablePauses] = useState(false);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 
+  // Metric descriptions for tooltip
+  const metricDescriptions = {
+    // Grammar
+    "Grammatical Accuracy": "Measures how correctly you use grammar rules, including verb tenses, subject-verb agreement, and sentence structure.",
+    "Grammatical Range": "Evaluates the variety and complexity of grammatical structures you use in your speech.",
+
+    // Vocabulary
+    "Lexical Diversity": "Measures the variety of different words you use. Higher diversity indicates richer vocabulary.",
+    "Word Sophistication": "Evaluates your use of advanced, academic, or less common vocabulary.",
+    "Word Specificity": "Checks if you use precise words instead of vague terms like 'thing', 'stuff', 'nice'.",
+    "Academic Language Use": "Measures formal register and academic tone appropriate for professional contexts.",
+    "Collocation Commonality": "Evaluates natural word combinations and phrases that native speakers commonly use.",
+    "Adverb Diversity": "Measures variety in adverb usage beyond simple time/place words.",
+    "Verb Diversity": "Evaluates use of varied verbs beyond basic ones like be/have/do/make/get.",
+
+    // Coherence
+    "Response Length": "Assesses if your response is adequately detailed and comprehensive for the question.",
+    "Lexical Density": "Ratio of content words (nouns, verbs, adjectives) to total words. Higher density = more informative.",
+    "Basic Connectives": "Use of simple linking words: and, but, or, so.",
+    "Causal Connectives": "Use of cause-effect words: because, therefore, thus, as a result.",
+    "Negative Connectives": "Use of contrast words: however, although, despite, nevertheless.",
+
+    // Fluency
+    "Speech Rate": "Words spoken per second. Natural pace is typically 2.5-4 words/sec.",
+    "Articulation Rate": "Syllables per second when actually speaking (excluding pauses).",
+    "Syllables Correct Per Minute": "Number of correctly pronounced syllables per minute.",
+    "Words Correct Per Minute": "Number of correctly pronounced words per minute.",
+    "Pause Count": "Total number of pauses detected in your speech.",
+    "Total Pause Duration": "Combined duration of all pauses in seconds.",
+  };
+
   const getLevelColor = (level) => {
     if (level === "high")
       return "text-emerald-400 bg-emerald-500/20 border-emerald-500/30";
@@ -320,17 +351,70 @@ function FeedbackDetails({
             <div className="relative">
               <button
                 onClick={() => setShowInfoTooltip(!showInfoTooltip)}
-                onBlur={() => setTimeout(() => setShowInfoTooltip(false), 150)}
+                onBlur={() => setTimeout(() => setShowInfoTooltip(false), 200)}
                 className="w-6 h-6 rounded-full bg-slate-700 hover:bg-slate-600 border border-slate-600 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200 text-sm font-medium"
               >
                 i
               </button>
               {showInfoTooltip && (
-                <div className="absolute left-0 top-8 z-50 w-72 p-4 bg-slate-800 border border-slate-600 rounded-xl shadow-xl text-sm">
-                  <p className="text-slate-300 leading-relaxed">
-                    These metrics evaluate your speech across Grammar, Vocabulary, Coherence, and Fluency. Scores range from 0-10, with higher scores indicating better performance.
-                  </p>
+                <div className="absolute left-0 top-8 z-50 w-96 max-h-96 overflow-y-auto p-4 bg-slate-800 border border-slate-600 rounded-xl shadow-xl text-sm custom-scrollbar">
                   <div className="absolute -top-2 left-2 w-3 h-3 bg-slate-800 border-l border-t border-slate-600 transform rotate-45"></div>
+
+                  {/* Grammar */}
+                  <div className="mb-4">
+                    <h4 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                      <span>📝</span> Grammar
+                    </h4>
+                    <ul className="space-y-1.5 text-slate-300 text-xs">
+                      <li><span className="text-white font-medium">Grammatical Accuracy:</span> {metricDescriptions["Grammatical Accuracy"]}</li>
+                      <li><span className="text-white font-medium">Grammatical Range:</span> {metricDescriptions["Grammatical Range"]}</li>
+                    </ul>
+                  </div>
+
+                  {/* Vocabulary */}
+                  <div className="mb-4">
+                    <h4 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                      <span>📚</span> Vocabulary
+                    </h4>
+                    <ul className="space-y-1.5 text-slate-300 text-xs">
+                      <li><span className="text-white font-medium">Lexical Diversity:</span> {metricDescriptions["Lexical Diversity"]}</li>
+                      <li><span className="text-white font-medium">Word Sophistication:</span> {metricDescriptions["Word Sophistication"]}</li>
+                      <li><span className="text-white font-medium">Word Specificity:</span> {metricDescriptions["Word Specificity"]}</li>
+                      <li><span className="text-white font-medium">Academic Language:</span> {metricDescriptions["Academic Language Use"]}</li>
+                      <li><span className="text-white font-medium">Collocation:</span> {metricDescriptions["Collocation Commonality"]}</li>
+                      <li><span className="text-white font-medium">Adverb Diversity:</span> {metricDescriptions["Adverb Diversity"]}</li>
+                      <li><span className="text-white font-medium">Verb Diversity:</span> {metricDescriptions["Verb Diversity"]}</li>
+                    </ul>
+                  </div>
+
+                  {/* Coherence */}
+                  <div className="mb-4">
+                    <h4 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                      <span>🔗</span> Coherence
+                    </h4>
+                    <ul className="space-y-1.5 text-slate-300 text-xs">
+                      <li><span className="text-white font-medium">Response Length:</span> {metricDescriptions["Response Length"]}</li>
+                      <li><span className="text-white font-medium">Lexical Density:</span> {metricDescriptions["Lexical Density"]}</li>
+                      <li><span className="text-white font-medium">Basic Connectives:</span> {metricDescriptions["Basic Connectives"]}</li>
+                      <li><span className="text-white font-medium">Causal Connectives:</span> {metricDescriptions["Causal Connectives"]}</li>
+                      <li><span className="text-white font-medium">Negative Connectives:</span> {metricDescriptions["Negative Connectives"]}</li>
+                    </ul>
+                  </div>
+
+                  {/* Fluency */}
+                  <div>
+                    <h4 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
+                      <span>🗣️</span> Fluency
+                    </h4>
+                    <ul className="space-y-1.5 text-slate-300 text-xs">
+                      <li><span className="text-white font-medium">Speech Rate:</span> {metricDescriptions["Speech Rate"]}</li>
+                      <li><span className="text-white font-medium">Articulation Rate:</span> {metricDescriptions["Articulation Rate"]}</li>
+                      <li><span className="text-white font-medium">Syllables/Min:</span> {metricDescriptions["Syllables Correct Per Minute"]}</li>
+                      <li><span className="text-white font-medium">Words/Min:</span> {metricDescriptions["Words Correct Per Minute"]}</li>
+                      <li><span className="text-white font-medium">Pause Count:</span> {metricDescriptions["Pause Count"]}</li>
+                      <li><span className="text-white font-medium">Pause Duration:</span> {metricDescriptions["Total Pause Duration"]}</li>
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -462,7 +546,7 @@ function FeedbackDetails({
                           </button>
 
                           {showNotablePauses && (
-                            <div className="p-5 pt-0 space-y-3 max-h-96 overflow-y-auto">
+                            <div className="p-5 pt-0 space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
                               {notablePauses.map((pause, idx) => {
                                 const pauseStart = pause[0];
                                 const pauseEnd = pause[1];

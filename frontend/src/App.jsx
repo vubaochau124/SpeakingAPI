@@ -4,11 +4,7 @@ import AudioPlayer from './components/AudioPlayer';
 import Transcript from './components/Transcript';
 import Relevance from './components/Relevance';
 import IELTSScore from './components/IELTSScore';
-import PTEScore from './components/PTEScore';
-import TOEICScore from './components/TOEICScore';
-import CEFRScore from './components/CEFRScore';
 import FeedbackDetails from './components/FeedbackDetails';
-import ScoreSelector from './components/ScoreSelector';
 import ImprovedAnswer from './components/ImprovedAnswer';
 import axios from 'axios';
 
@@ -38,7 +34,6 @@ function App() {
   const [hasQuestion, setHasQuestion] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [showImprovedTranscript, setShowImprovedTranscript] = useState(false);
-  const [scoringSystem, setScoringSystem] = useState('ielts');
 
   const handleScriptedEvaluate = async (audioFile, text, options = {}) => {
     setScriptedLoading(true);
@@ -198,44 +193,11 @@ function App() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Score Selector */}
-                <ScoreSelector
-                  activeSystem={scoringSystem}
-                  onSystemChange={setScoringSystem}
-                  availableSystems={{
-                    ielts: !!scriptedResults.text_score?.ielts_score,
-                    pte: !!scriptedResults.text_score?.pte_score,
-                    toeic: !!scriptedResults.text_score?.toeic_score,
-                    cefr: !!scriptedResults.text_score?.cefr_score
-                  }}
-                />
-
-                {/* Score Cards - Conditional based on selected system */}
-                {scoringSystem === 'ielts' && scriptedResults.text_score?.ielts_score && (
+                {/* IELTS Score */}
+                {scriptedResults.text_score?.ielts_score && (
                   <IELTSScore
                     ieltsScore={scriptedResults.text_score.ielts_score}
-                    title="Part 1 Score (IELTS)"
-                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'pte' && scriptedResults.text_score?.pte_score && (
-                  <PTEScore
-                    pteScore={scriptedResults.text_score.pte_score}
-                    title="Part 1 Score (PTE)"
-                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'toeic' && scriptedResults.text_score?.toeic_score && (
-                  <TOEICScore
-                    toeicScore={scriptedResults.text_score.toeic_score}
-                    title="Part 1 Score (TOEIC)"
-                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'cefr' && scriptedResults.text_score?.cefr_score && (
-                  <CEFRScore
-                    cefrScore={scriptedResults.text_score.cefr_score}
-                    title="Part 1 Level (CEFR)"
+                    title="Part 1 Score"
                     detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
                   />
                 )}
@@ -377,7 +339,7 @@ function App() {
                             </svg>
                           </button>
 
-                          <div id="scripted-pauses" className="hidden p-5 pt-0 space-y-3 max-h-96 overflow-y-auto">
+                          <div id="scripted-pauses" className="hidden p-5 pt-0 space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
                             {notablePauses.map((pause, idx) => {
                               const pauseStart = pause[0];
                               const pauseEnd = pause[1];
@@ -468,44 +430,11 @@ function App() {
                   </div>
                 )}
 
-                {/* Score Selector */}
-                <ScoreSelector
-                  activeSystem={scoringSystem}
-                  onSystemChange={setScoringSystem}
-                  availableSystems={{
-                    ielts: !!unscriptedResults.speech_score?.ielts_score,
-                    pte: !!unscriptedResults.speech_score?.pte_score,
-                    toeic: !!unscriptedResults.speech_score?.toeic_score,
-                    cefr: !!unscriptedResults.speech_score?.cefr_score
-                  }}
-                />
-
-                {/* Score Cards - Conditional based on selected system */}
-                {scoringSystem === 'ielts' && unscriptedResults.speech_score?.ielts_score && (
+                {/* IELTS Score */}
+                {unscriptedResults.speech_score?.ielts_score && (
                   <IELTSScore
                     ieltsScore={unscriptedResults.speech_score.ielts_score}
-                    title="Part 2 Score (IELTS)"
-                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'pte' && unscriptedResults.speech_score?.pte_score && (
-                  <PTEScore
-                    pteScore={unscriptedResults.speech_score.pte_score}
-                    title="Part 2 Score (PTE)"
-                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'toeic' && unscriptedResults.speech_score?.toeic_score && (
-                  <TOEICScore
-                    toeicScore={unscriptedResults.speech_score.toeic_score}
-                    title="Part 2 Score (TOEIC)"
-                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
-                  />
-                )}
-                {scoringSystem === 'cefr' && unscriptedResults.speech_score?.cefr_score && (
-                  <CEFRScore
-                    cefrScore={unscriptedResults.speech_score.cefr_score}
-                    title="Part 2 Level (CEFR)"
+                    title="Part 2 Score"
                     detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
                   />
                 )}
