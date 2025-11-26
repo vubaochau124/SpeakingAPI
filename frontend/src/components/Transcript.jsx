@@ -57,7 +57,7 @@ function Transcript({ transcript, wordList, audioData }) {
 
     if (startFrame === null || endFrame === null) return;
 
-    // Convert frames to seconds (assuming 100 frames per second based on SpeechAce)
+    // Convert frames to seconds (assuming 100 frames per second / centiseconds)
     const frameRate = 100;
     const startTime = startFrame / frameRate;
     const duration = (endFrame - startFrame) / frameRate;

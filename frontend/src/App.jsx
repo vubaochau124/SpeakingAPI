@@ -199,6 +199,7 @@ function App() {
                     ieltsScore={scriptedResults.text_score.ielts_score}
                     title="Part 1 Score"
                     detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
+                    azureScores={scriptedResults.text_score?.azure_scores}
                   />
                 )}
 
@@ -436,6 +437,7 @@ function App() {
                     ieltsScore={unscriptedResults.speech_score.ielts_score}
                     title="Part 2 Score"
                     detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
+                    azureScores={unscriptedResults.speech_score?.azure_scores}
                   />
                 )}
 

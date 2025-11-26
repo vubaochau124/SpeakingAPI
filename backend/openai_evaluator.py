@@ -36,7 +36,7 @@ class OpenAIEvaluator:
         """Enhance grammar, vocabulary, coherence, and error evaluation using GPT-4
 
         Args:
-            transcript (str): Transcribed speech text from SpeechAce
+            transcript (str): Transcribed speech text from speech recognition
             question (str, optional): Question/context for relevance evaluation
 
         Returns:
@@ -69,6 +69,50 @@ class OpenAIEvaluator:
         print("Generating improved answer suggestion...")
         improved_answer = self._generate_improved_answer(transcript, question, result)
         result['improved_answer'] = improved_answer
+
+        # Step 3: Calculate OpenAI overall score
+        enhanced_ielts = result.get('enhanced_ielts', {})
+        grammar_score = enhanced_ielts.get('grammar', 0) or 0
+        vocab_score = enhanced_ielts.get('vocab', 0) or 0
+        coherence_score = enhanced_ielts.get('coherence', 0) or 0
+
+        # Convert IELTS 0-9 to 0-100 and calculate weighted average
+        total_score = (
+            (grammar_score * 10) * 0.35 +
+            (vocab_score * 10) * 0.35 +
+            (coherence_score * 10) * 0.30
+        )
+
+        # Assign grade
+        grade = ''
+        if total_score >= 90:
+            grade = 'A+'
+        elif total_score >= 85:
+            grade = 'A'
+        elif total_score >= 80:
+            grade = 'A-'
+        elif total_score >= 75:
+            grade = 'B+'
+        elif total_score >= 70:
+            grade = 'B'
+        elif total_score >= 65:
+            grade = 'B-'
+        elif total_score >= 60:
+            grade = 'C+'
+        elif total_score >= 55:
+            grade = 'C'
+        elif total_score >= 50:
+            grade = 'C-'
+        else:
+            grade = 'D'
+
+        result['openai_overall_score'] = {
+            'grammar_score': grammar_score * 10,
+            'vocab_score': vocab_score * 10,
+            'coherence_score': coherence_score * 10,
+            'total_score': round(total_score, 2),
+            'grade': grade
+        }
 
         return result
 
