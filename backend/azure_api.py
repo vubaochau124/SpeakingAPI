@@ -1,10 +1,19 @@
 import os
 import json
 import threading
+import tempfile
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Try to import pydub for audio conversion
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+    print("Warning: pydub not installed. Audio conversion unavailable. Install with: pip install pydub")
 
 # Try to import Azure Speech SDK
 try:
@@ -40,6 +49,60 @@ class AzureSpeechAPI:
             subscription=self.speech_key,
             region=self.service_region
         )
+
+    def _convert_to_wav(self, audio_file_path):
+        """Convert audio file to WAV format if needed.
+
+        Azure Speech API works best with WAV format. This method converts
+        WebM, MP3, M4A, OGG and other formats to WAV.
+
+        Args:
+            audio_file_path (str): Path to the audio file
+
+        Returns:
+            tuple: (wav_path, needs_cleanup) - path to WAV file and whether to delete it after
+        """
+        ext = os.path.splitext(audio_file_path)[1].lower()
+
+        # If already WAV, no conversion needed
+        if ext == '.wav':
+            return audio_file_path, False
+
+        # Check if pydub is available
+        if not PYDUB_AVAILABLE:
+            print(f"[Warning] Cannot convert {ext} to WAV - pydub not installed. Trying anyway...")
+            return audio_file_path, False
+
+        print(f"[Azure] Converting {ext} to WAV format...")
+
+        try:
+            # Load audio based on format
+            if ext == '.webm':
+                audio = AudioSegment.from_file(audio_file_path, format='webm')
+            elif ext == '.mp3':
+                audio = AudioSegment.from_mp3(audio_file_path)
+            elif ext == '.m4a':
+                audio = AudioSegment.from_file(audio_file_path, format='m4a')
+            elif ext == '.ogg':
+                audio = AudioSegment.from_ogg(audio_file_path)
+            elif ext == '.aiff':
+                audio = AudioSegment.from_file(audio_file_path, format='aiff')
+            else:
+                audio = AudioSegment.from_file(audio_file_path)
+
+            # Convert to WAV (16kHz, mono, 16-bit) - optimal for Azure Speech
+            audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+
+            # Save to temp file
+            wav_path = tempfile.mktemp(suffix='.wav')
+            audio.export(wav_path, format='wav')
+
+            print(f"[Azure] Converted to WAV: {wav_path}")
+            return wav_path, True
+
+        except Exception as e:
+            print(f"[Warning] Audio conversion failed: {e}. Using original file...")
+            return audio_file_path, False
 
     def _map_azure_to_frontend_word(self, azure_word):
         """Map Azure word result to frontend-expected word format"""
@@ -205,155 +268,168 @@ class AzureSpeechAPI:
 
         print(f"[Azure] Processing audio file: {audio_file_path}")
 
+        # Convert to WAV if needed (WebM, MP3, etc.)
+        wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
+
         # Map dialect format
         language = 'en-US' if dialect.lower() in ['en-us', 'en_us'] else 'en-GB' if dialect.lower() in ['en-gb', 'en_gb'] else 'en-US'
 
-        # Configure audio
-        audio_config = speechsdk.audio.AudioConfig(filename=audio_file_path)
+        try:
+            # Configure audio with WAV file
+            audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
 
-        # Configure pronunciation assessment for unscripted
-        pronunciation_config = speechsdk.PronunciationAssessmentConfig(
-            reference_text="",
-            grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
-            granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
-            enable_miscue=False
-        )
-        pronunciation_config.enable_prosody_assessment()
+            # Configure pronunciation assessment for unscripted
+            pronunciation_config = speechsdk.PronunciationAssessmentConfig(
+                reference_text="",
+                grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+                granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
+                enable_miscue=False
+            )
+            pronunciation_config.enable_prosody_assessment()
 
-        # Create speech recognizer
-        speech_recognizer = speechsdk.SpeechRecognizer(
-            speech_config=self.speech_config,
-            language=language,
-            audio_config=audio_config
-        )
-        pronunciation_config.apply_to(speech_recognizer)
+            # Create speech recognizer
+            speech_recognizer = speechsdk.SpeechRecognizer(
+                speech_config=self.speech_config,
+                language=language,
+                audio_config=audio_config
+            )
+            pronunciation_config.apply_to(speech_recognizer)
 
-        # Storage for continuous recognition
-        all_results = []
-        all_words = []
-        all_transcripts = []
-        accuracy_scores = []
-        fluency_scores = []
-        prosody_scores = []
-        pronunciation_scores = []
-        done = threading.Event()
-        error_message = [None]  # Use list to allow modification in nested function
+            # Storage for continuous recognition
+            all_results = []
+            all_words = []
+            all_transcripts = []
+            accuracy_scores = []
+            fluency_scores = []
+            prosody_scores = []
+            pronunciation_scores = []
+            done = threading.Event()
+            error_message = [None]  # Use list to allow modification in nested function
 
-        def on_recognized(evt):
-            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                json_result = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
-                if json_result:
-                    result_json = json.loads(json_result)
-                    all_results.append(result_json)
-                    all_transcripts.append(evt.result.text)
+            def on_recognized(evt):
+                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                    json_result = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
+                    if json_result:
+                        result_json = json.loads(json_result)
+                        all_results.append(result_json)
+                        all_transcripts.append(evt.result.text)
 
-                    if result_json.get('NBest') and len(result_json['NBest']) > 0:
-                        words = result_json['NBest'][0].get('Words', [])
-                        all_words.extend(words)
+                        if result_json.get('NBest') and len(result_json['NBest']) > 0:
+                            words = result_json['NBest'][0].get('Words', [])
+                            all_words.extend(words)
 
-                        pron = result_json['NBest'][0].get('PronunciationAssessment', {})
-                        if pron.get('AccuracyScore') is not None:
-                            accuracy_scores.append(pron['AccuracyScore'])
-                        if pron.get('FluencyScore') is not None:
-                            fluency_scores.append(pron['FluencyScore'])
-                        if pron.get('ProsodyScore') is not None:
-                            prosody_scores.append(pron['ProsodyScore'])
-                        if pron.get('PronScore') is not None:
-                            pronunciation_scores.append(pron['PronScore'])
+                            pron = result_json['NBest'][0].get('PronunciationAssessment', {})
+                            if pron.get('AccuracyScore') is not None:
+                                accuracy_scores.append(pron['AccuracyScore'])
+                            if pron.get('FluencyScore') is not None:
+                                fluency_scores.append(pron['FluencyScore'])
+                            if pron.get('ProsodyScore') is not None:
+                                prosody_scores.append(pron['ProsodyScore'])
+                            if pron.get('PronScore') is not None:
+                                pronunciation_scores.append(pron['PronScore'])
 
-                print(f"  [Segment] {evt.result.text[:60]}..." if len(evt.result.text) > 60 else f"  [Segment] {evt.result.text}")
+                    print(f"  [Segment] {evt.result.text[:60]}..." if len(evt.result.text) > 60 else f"  [Segment] {evt.result.text}")
 
-        def on_canceled(evt):
-            if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
-                error_message[0] = evt.cancellation_details.error_details
-                print(f"  [Error] {error_message[0]}")
-            done.set()
+            def on_canceled(evt):
+                if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
+                    error_message[0] = evt.cancellation_details.error_details
+                    print(f"  [Error] {error_message[0]}")
+                done.set()
 
-        def on_session_stopped(evt):
-            print("  [Session] Audio processing complete")
-            done.set()
+            def on_session_stopped(evt):
+                print("  [Session] Audio processing complete")
+                done.set()
 
-        # Connect handlers
-        speech_recognizer.recognized.connect(on_recognized)
-        speech_recognizer.canceled.connect(on_canceled)
-        speech_recognizer.session_stopped.connect(on_session_stopped)
+            # Connect handlers
+            speech_recognizer.recognized.connect(on_recognized)
+            speech_recognizer.canceled.connect(on_canceled)
+            speech_recognizer.session_stopped.connect(on_session_stopped)
 
-        # Start continuous recognition
-        print("[Azure] Starting continuous recognition...")
-        speech_recognizer.start_continuous_recognition()
+            # Start continuous recognition
+            print("[Azure] Starting continuous recognition...")
+            speech_recognizer.start_continuous_recognition()
 
-        # Wait for completion (2 minute timeout)
-        done.wait(timeout=120)
-        speech_recognizer.stop_continuous_recognition()
+            # Wait for completion (2 minute timeout)
+            done.wait(timeout=120)
+            speech_recognizer.stop_continuous_recognition()
 
-        if error_message[0]:
-            raise Exception(f"Azure Speech API error: {error_message[0]}")
+            if error_message[0]:
+                raise Exception(f"Azure Speech API error: {error_message[0]}")
 
-        # Combine results
-        full_transcript = ' '.join(all_transcripts)
-        print(f"\n[Azure] Total segments: {len(all_results)}, Total words: {len(all_words)}")
+            # Combine results
+            full_transcript = ' '.join(all_transcripts)
+            print(f"\n[Azure] Total segments: {len(all_results)}, Total words: {len(all_words)}")
 
-        # Calculate average scores
-        accuracy_score = sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
-        fluency_score = sum(fluency_scores) / len(fluency_scores) if fluency_scores else 0
-        prosody_score = sum(prosody_scores) / len(prosody_scores) if prosody_scores else 0
-        pronunciation_score = sum(pronunciation_scores) / len(pronunciation_scores) if pronunciation_scores else 0
+            # Calculate average scores
+            accuracy_score = sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
+            fluency_score = sum(fluency_scores) / len(fluency_scores) if fluency_scores else 0
+            prosody_score = sum(prosody_scores) / len(prosody_scores) if prosody_scores else 0
+            pronunciation_score = sum(pronunciation_scores) / len(pronunciation_scores) if pronunciation_scores else 0
 
-        # Calculate duration
-        total_duration = sum(r.get('Duration', 0) for r in all_results)
-        audio_duration_sec = total_duration / 10000000 if total_duration else 5
+            # Calculate duration
+            total_duration = sum(r.get('Duration', 0) for r in all_results)
+            audio_duration_sec = total_duration / 10000000 if total_duration else 5
 
-        # Build word_score_list
-        word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
+            # Build word_score_list
+            word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
 
-        # Convert to IELTS
-        ielts_pronunciation = self._azure_score_to_ielts(accuracy_score)
-        ielts_fluency = self._azure_score_to_ielts(fluency_score)
-        ielts_prosody = self._azure_score_to_ielts(prosody_score)
+            # Convert to IELTS
+            ielts_pronunciation = self._azure_score_to_ielts(accuracy_score)
+            ielts_fluency = self._azure_score_to_ielts(fluency_score)
+            ielts_prosody = self._azure_score_to_ielts(prosody_score)
 
-        # Fluency metrics
-        fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
+            # Fluency metrics
+            fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
 
-        response = {
-            'status': 'success',
-            'speech_score': {
-                'transcript': full_transcript,
-                'word_score_list': word_score_list,
-                'ielts_score': {
-                    'pronunciation': ielts_pronunciation,
-                    'fluency': ielts_fluency,
-                    'prosody': ielts_prosody,
-                    'grammar': None,
-                    'vocab': None,
-                    'coherence': None
-                },
-                'azure_scores': {
-                    'accuracy': round(accuracy_score, 1),
-                    'fluency': round(fluency_score, 1),
-                    'prosody': round(prosody_score, 1),
-                    'pronunciation': round(pronunciation_score, 1)
-                },
-                'fluency': fluency_metrics,
-                'detected_dialect': {'lang_id': language}
-            },
-            '_raw_azure_response': all_results
-        }
-
-        print(f"[Azure] Transcript: {full_transcript[:100]}..." if len(full_transcript) > 100 else f"[Azure] Transcript: {full_transcript}")
-        print(f"[Azure] Scores - Accuracy: {accuracy_score:.1f}, Fluency: {fluency_score:.1f}, Prosody: {prosody_score:.1f}")
-
-        if not full_transcript:
-            return {
-                'status': 'error',
-                'error': 'No speech recognized',
+            response = {
+                'status': 'success',
                 'speech_score': {
-                    'transcript': '',
-                    'word_score_list': [],
-                    'ielts_score': {'pronunciation': 0, 'fluency': 0, 'grammar': None, 'vocab': None, 'coherence': None}
-                }
+                    'transcript': full_transcript,
+                    'word_score_list': word_score_list,
+                    'ielts_score': {
+                        'pronunciation': ielts_pronunciation,
+                        'fluency': ielts_fluency,
+                        'prosody': ielts_prosody,
+                        'grammar': None,
+                        'vocab': None,
+                        'coherence': None
+                    },
+                    'azure_scores': {
+                        'accuracy': round(accuracy_score, 1),
+                        'fluency': round(fluency_score, 1),
+                        'prosody': round(prosody_score, 1),
+                        'pronunciation': round(pronunciation_score, 1)
+                    },
+                    'fluency': fluency_metrics,
+                    'detected_dialect': {'lang_id': language}
+                },
+                '_raw_azure_response': all_results
             }
 
-        return response
+            print(f"[Azure] Transcript: {full_transcript[:100]}..." if len(full_transcript) > 100 else f"[Azure] Transcript: {full_transcript}")
+            print(f"[Azure] Scores - Accuracy: {accuracy_score:.1f}, Fluency: {fluency_score:.1f}, Prosody: {prosody_score:.1f}")
+
+            if not full_transcript:
+                return {
+                    'status': 'error',
+                    'error': 'No speech recognized',
+                    'speech_score': {
+                        'transcript': '',
+                        'word_score_list': [],
+                        'ielts_score': {'pronunciation': 0, 'fluency': 0, 'grammar': None, 'vocab': None, 'coherence': None}
+                    }
+                }
+
+            return response
+
+        finally:
+            # Clean up temp WAV file if we created one
+            if needs_cleanup and os.path.exists(wav_path):
+                try:
+                    os.remove(wav_path)
+                    print(f"[Azure] Cleaned up temp file: {wav_path}")
+                except Exception:
+                    pass
 
     def score_text(self, audio_file_path, text,
                    user_id="XYZ-ABC-99001",
@@ -369,143 +445,156 @@ class AzureSpeechAPI:
         print(f"[Azure] Processing scripted audio: {audio_file_path}")
         print(f"[Azure] Reference text: {text[:80]}..." if len(text) > 80 else f"[Azure] Reference text: {text}")
 
+        # Convert to WAV if needed (WebM, MP3, etc.)
+        wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
+
         language = 'en-US' if dialect.lower() in ['en-us', 'en_us'] else 'en-GB' if dialect.lower() in ['en-gb', 'en_gb'] else 'en-US'
 
-        audio_config = speechsdk.audio.AudioConfig(filename=audio_file_path)
+        try:
+            audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
 
-        # For scripted, enable_miscue must be False in continuous mode
-        pronunciation_config = speechsdk.PronunciationAssessmentConfig(
-            reference_text=text.strip(),
-            grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
-            granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
-            enable_miscue=False  # Must be False for continuous recognition
-        )
-        pronunciation_config.enable_prosody_assessment()
+            # For scripted, enable_miscue must be False in continuous mode
+            pronunciation_config = speechsdk.PronunciationAssessmentConfig(
+                reference_text=text.strip(),
+                grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+                granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
+                enable_miscue=False  # Must be False for continuous recognition
+            )
+            pronunciation_config.enable_prosody_assessment()
 
-        speech_recognizer = speechsdk.SpeechRecognizer(
-            speech_config=self.speech_config,
-            language=language,
-            audio_config=audio_config
-        )
-        pronunciation_config.apply_to(speech_recognizer)
+            speech_recognizer = speechsdk.SpeechRecognizer(
+                speech_config=self.speech_config,
+                language=language,
+                audio_config=audio_config
+            )
+            pronunciation_config.apply_to(speech_recognizer)
 
-        # Storage
-        all_results = []
-        all_words = []
-        all_transcripts = []
-        accuracy_scores = []
-        fluency_scores = []
-        prosody_scores = []
-        completeness_scores = []
-        pronunciation_scores = []
-        done = threading.Event()
-        error_message = [None]
+            # Storage
+            all_results = []
+            all_words = []
+            all_transcripts = []
+            accuracy_scores = []
+            fluency_scores = []
+            prosody_scores = []
+            completeness_scores = []
+            pronunciation_scores = []
+            done = threading.Event()
+            error_message = [None]
 
-        def on_recognized(evt):
-            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                json_result = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
-                if json_result:
-                    result_json = json.loads(json_result)
-                    all_results.append(result_json)
-                    all_transcripts.append(evt.result.text)
+            def on_recognized(evt):
+                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                    json_result = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
+                    if json_result:
+                        result_json = json.loads(json_result)
+                        all_results.append(result_json)
+                        all_transcripts.append(evt.result.text)
 
-                    if result_json.get('NBest') and len(result_json['NBest']) > 0:
-                        words = result_json['NBest'][0].get('Words', [])
-                        all_words.extend(words)
+                        if result_json.get('NBest') and len(result_json['NBest']) > 0:
+                            words = result_json['NBest'][0].get('Words', [])
+                            all_words.extend(words)
 
-                        pron = result_json['NBest'][0].get('PronunciationAssessment', {})
-                        if pron.get('AccuracyScore') is not None:
-                            accuracy_scores.append(pron['AccuracyScore'])
-                        if pron.get('FluencyScore') is not None:
-                            fluency_scores.append(pron['FluencyScore'])
-                        if pron.get('ProsodyScore') is not None:
-                            prosody_scores.append(pron['ProsodyScore'])
-                        if pron.get('CompletenessScore') is not None:
-                            completeness_scores.append(pron['CompletenessScore'])
-                        if pron.get('PronScore') is not None:
-                            pronunciation_scores.append(pron['PronScore'])
+                            pron = result_json['NBest'][0].get('PronunciationAssessment', {})
+                            if pron.get('AccuracyScore') is not None:
+                                accuracy_scores.append(pron['AccuracyScore'])
+                            if pron.get('FluencyScore') is not None:
+                                fluency_scores.append(pron['FluencyScore'])
+                            if pron.get('ProsodyScore') is not None:
+                                prosody_scores.append(pron['ProsodyScore'])
+                            if pron.get('CompletenessScore') is not None:
+                                completeness_scores.append(pron['CompletenessScore'])
+                            if pron.get('PronScore') is not None:
+                                pronunciation_scores.append(pron['PronScore'])
 
-                print(f"  [Segment] {evt.result.text[:60]}..." if len(evt.result.text) > 60 else f"  [Segment] {evt.result.text}")
+                    print(f"  [Segment] {evt.result.text[:60]}..." if len(evt.result.text) > 60 else f"  [Segment] {evt.result.text}")
 
-        def on_canceled(evt):
-            if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
-                error_message[0] = evt.cancellation_details.error_details
-                print(f"  [Error] {error_message[0]}")
-            done.set()
+            def on_canceled(evt):
+                if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
+                    error_message[0] = evt.cancellation_details.error_details
+                    print(f"  [Error] {error_message[0]}")
+                done.set()
 
-        def on_session_stopped(evt):
-            print("  [Session] Audio processing complete")
-            done.set()
+            def on_session_stopped(evt):
+                print("  [Session] Audio processing complete")
+                done.set()
 
-        speech_recognizer.recognized.connect(on_recognized)
-        speech_recognizer.canceled.connect(on_canceled)
-        speech_recognizer.session_stopped.connect(on_session_stopped)
+            speech_recognizer.recognized.connect(on_recognized)
+            speech_recognizer.canceled.connect(on_canceled)
+            speech_recognizer.session_stopped.connect(on_session_stopped)
 
-        print("[Azure] Starting continuous recognition for scripted...")
-        speech_recognizer.start_continuous_recognition()
+            print("[Azure] Starting continuous recognition for scripted...")
+            speech_recognizer.start_continuous_recognition()
 
-        done.wait(timeout=120)
-        speech_recognizer.stop_continuous_recognition()
+            done.wait(timeout=120)
+            speech_recognizer.stop_continuous_recognition()
 
-        if error_message[0]:
-            raise Exception(f"Azure Speech API error: {error_message[0]}")
+            if error_message[0]:
+                raise Exception(f"Azure Speech API error: {error_message[0]}")
 
-        full_transcript = ' '.join(all_transcripts)
-        print(f"\n[Azure] Total segments: {len(all_results)}, Total words: {len(all_words)}")
+            full_transcript = ' '.join(all_transcripts)
+            print(f"\n[Azure] Total segments: {len(all_results)}, Total words: {len(all_words)}")
 
-        accuracy_score = sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
-        fluency_score = sum(fluency_scores) / len(fluency_scores) if fluency_scores else 0
-        prosody_score = sum(prosody_scores) / len(prosody_scores) if prosody_scores else 0
-        completeness_score = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
-        pronunciation_score = sum(pronunciation_scores) / len(pronunciation_scores) if pronunciation_scores else 0
+            accuracy_score = sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
+            fluency_score = sum(fluency_scores) / len(fluency_scores) if fluency_scores else 0
+            prosody_score = sum(prosody_scores) / len(prosody_scores) if prosody_scores else 0
+            completeness_score = sum(completeness_scores) / len(completeness_scores) if completeness_scores else 0
+            pronunciation_score = sum(pronunciation_scores) / len(pronunciation_scores) if pronunciation_scores else 0
 
-        total_duration = sum(r.get('Duration', 0) for r in all_results)
-        audio_duration_sec = total_duration / 10000000 if total_duration else 5
+            total_duration = sum(r.get('Duration', 0) for r in all_results)
+            audio_duration_sec = total_duration / 10000000 if total_duration else 5
 
-        word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
+            word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
 
-        ielts_pronunciation = self._azure_score_to_ielts(accuracy_score)
-        ielts_fluency = self._azure_score_to_ielts(fluency_score)
-        ielts_completeness = self._azure_score_to_ielts(completeness_score)
+            ielts_pronunciation = self._azure_score_to_ielts(accuracy_score)
+            ielts_fluency = self._azure_score_to_ielts(fluency_score)
+            ielts_completeness = self._azure_score_to_ielts(completeness_score)
 
-        fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
+            fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
 
-        response = {
-            'status': 'success',
-            'text_score': {
-                'transcript': full_transcript,
-                'reference_text': text,
-                'word_score_list': word_score_list,
-                'ielts_score': {
-                    'pronunciation': ielts_pronunciation,
-                    'fluency': ielts_fluency,
-                    'completeness': ielts_completeness
-                },
-                'azure_scores': {
-                    'accuracy': round(accuracy_score, 1),
-                    'fluency': round(fluency_score, 1),
-                    'prosody': round(prosody_score, 1),
-                    'completeness': round(completeness_score, 1),
-                    'pronunciation': round(pronunciation_score, 1)
-                },
-                'fluency': fluency_metrics,
-                'detected_dialect': {'lang_id': language}
-            },
-            '_raw_azure_response': all_results
-        }
-
-        print(f"[Azure] Scores - Accuracy: {accuracy_score:.1f}, Fluency: {fluency_score:.1f}, Completeness: {completeness_score:.1f}")
-
-        if not full_transcript:
-            return {
-                'status': 'error',
-                'error': 'No speech recognized',
+            response = {
+                'status': 'success',
                 'text_score': {
-                    'transcript': '',
+                    'transcript': full_transcript,
                     'reference_text': text,
-                    'word_score_list': [],
-                    'ielts_score': {'pronunciation': 0, 'fluency': 0, 'completeness': 0}
-                }
+                    'word_score_list': word_score_list,
+                    'ielts_score': {
+                        'pronunciation': ielts_pronunciation,
+                        'fluency': ielts_fluency,
+                        'completeness': ielts_completeness
+                    },
+                    'azure_scores': {
+                        'accuracy': round(accuracy_score, 1),
+                        'fluency': round(fluency_score, 1),
+                        'prosody': round(prosody_score, 1),
+                        'completeness': round(completeness_score, 1),
+                        'pronunciation': round(pronunciation_score, 1)
+                    },
+                    'fluency': fluency_metrics,
+                    'detected_dialect': {'lang_id': language}
+                },
+                '_raw_azure_response': all_results
             }
 
-        return response
+            print(f"[Azure] Scores - Accuracy: {accuracy_score:.1f}, Fluency: {fluency_score:.1f}, Completeness: {completeness_score:.1f}")
+
+            if not full_transcript:
+                return {
+                    'status': 'error',
+                    'error': 'No speech recognized',
+                    'text_score': {
+                        'transcript': '',
+                        'reference_text': text,
+                        'word_score_list': [],
+                        'ielts_score': {'pronunciation': 0, 'fluency': 0, 'completeness': 0}
+                    }
+                }
+
+            return response
+
+        finally:
+            # Clean up temp WAV file if we created one
+            if needs_cleanup and os.path.exists(wav_path):
+                try:
+                    os.remove(wav_path)
+                    print(f"[Azure] Cleaned up temp file: {wav_path}")
+                except Exception:
+                    pass

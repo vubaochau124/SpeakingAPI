@@ -112,6 +112,89 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/api/convert-audio")
+async def convert_audio(
+    audio: UploadFile = File(...),
+    format: str = Form("mp3")
+):
+    """Convert audio file to MP3 or WAV format"""
+    from fastapi.responses import Response
+
+    if format not in ['mp3', 'wav']:
+        raise HTTPException(status_code=400, detail="Format must be 'mp3' or 'wav'")
+
+    # Save uploaded file temporarily
+    filename = audio.filename.replace(" ", "_")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+    try:
+        # Save file
+        with open(filepath, "wb") as buffer:
+            content = await audio.read()
+            buffer.write(content)
+
+        # Import pydub
+        try:
+            from pydub import AudioSegment
+        except ImportError:
+            raise HTTPException(status_code=500, detail="pydub not installed. Cannot convert audio.")
+
+        # Load audio
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'webm'
+        try:
+            if ext == 'webm':
+                audio_segment = AudioSegment.from_file(filepath, format='webm')
+            elif ext == 'mp3':
+                audio_segment = AudioSegment.from_mp3(filepath)
+            elif ext == 'wav':
+                audio_segment = AudioSegment.from_wav(filepath)
+            elif ext == 'm4a':
+                audio_segment = AudioSegment.from_file(filepath, format='m4a')
+            elif ext == 'ogg':
+                audio_segment = AudioSegment.from_ogg(filepath)
+            else:
+                audio_segment = AudioSegment.from_file(filepath)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to load audio: {str(e)}")
+
+        # Convert to target format
+        output_path = os.path.join(UPLOAD_FOLDER, f"converted.{format}")
+
+        if format == 'mp3':
+            # Export as MP3 (128kbps)
+            audio_segment.export(output_path, format='mp3', bitrate='128k')
+            mime_type = 'audio/mpeg'
+        else:
+            # Export as WAV (16kHz, mono, 16-bit for compatibility)
+            audio_segment = audio_segment.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+            audio_segment.export(output_path, format='wav')
+            mime_type = 'audio/wav'
+
+        # Read converted file
+        with open(output_path, 'rb') as f:
+            converted_data = f.read()
+
+        # Clean up
+        os.remove(filepath)
+        os.remove(output_path)
+
+        return Response(
+            content=converted_data,
+            media_type=mime_type,
+            headers={
+                'Content-Disposition': f'attachment; filename="recording.{format}"'
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up on error
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/questions")
 async def get_questions():
     """Get all questions from database"""

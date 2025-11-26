@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import AudioDownload from "./AudioDownload";
 
 function AudioPlayer({ audioData }) {
   const audioRef = useRef(null);
@@ -297,6 +298,9 @@ function AudioPlayer({ audioData }) {
               </div>
             )}
           </div>
+
+          {/* Download Button */}
+          <AudioDownload audioData={audioData} />
         </div>
       </div>
     </div>

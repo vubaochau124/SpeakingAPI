@@ -6,3 +6,4 @@ python-dotenv
 gunicorn
 openai
 azure-cognitiveservices-speech
+pydub
