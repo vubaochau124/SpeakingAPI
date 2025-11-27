@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import numpy as np
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -218,11 +219,55 @@ class AzureSpeechAPI:
             return wav_path
 
     def _transcribe_audio(self, wav_path, language='en-US'):
-        """Pass 1: Speech-to-Text only (no pronunciation assessment).
+        """Pass 1: Speech-to-Text using OpenAI Whisper.
 
-        This method transcribes audio using Azure Speech-to-Text without
-        pronunciation assessment. The transcript is then used as reference
-        text for Pass 2 (pronunciation assessment).
+        This method transcribes audio using OpenAI Whisper API.
+        The transcript is then used as reference text for Pass 2 (pronunciation assessment).
+
+        Args:
+            wav_path (str): Path to WAV file
+            language (str): Language code (default: 'en-US') - mapped to Whisper format
+
+        Returns:
+            str: Transcribed text
+        """
+        print(f"[Whisper Pass 1] Starting OpenAI Whisper transcription...")
+
+        try:
+            # Initialize OpenAI client
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            if not openai_api_key:
+                print("[Whisper Pass 1] OpenAI API key not found. Falling back to Azure STT.")
+                return self._transcribe_audio_azure(wav_path, language)
+
+            client = OpenAI(api_key=openai_api_key)
+
+            # Map language code to Whisper format (ISO 639-1)
+            whisper_lang = 'en'  # Default English
+            if language.lower().startswith('en'):
+                whisper_lang = 'en'
+
+            # Open audio file and transcribe
+            with open(wav_path, 'rb') as audio_file:
+                transcript_response = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language=whisper_lang,
+                    response_format="text"
+                )
+
+            transcript = transcript_response.strip() if isinstance(transcript_response, str) else str(transcript_response).strip()
+
+            print(f"[Whisper Pass 1] Transcript: {transcript[:100]}..." if len(transcript) > 100 else f"[Whisper Pass 1] Transcript: {transcript}")
+
+            return transcript
+
+        except Exception as e:
+            print(f"[Whisper Pass 1] Error: {e}. Falling back to Azure STT.")
+            return self._transcribe_audio_azure(wav_path, language)
+
+    def _transcribe_audio_azure(self, wav_path, language='en-US'):
+        """Fallback: Speech-to-Text using Azure (if Whisper fails).
 
         Args:
             wav_path (str): Path to WAV file
@@ -231,7 +276,7 @@ class AzureSpeechAPI:
         Returns:
             str: Transcribed text
         """
-        print(f"[Azure Pass 1] Starting Speech-to-Text transcription...")
+        print(f"[Azure STT Fallback] Starting Azure Speech-to-Text...")
 
         audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
         speech_recognizer = speechsdk.SpeechRecognizer(
@@ -271,11 +316,11 @@ class AzureSpeechAPI:
         speech_recognizer.stop_continuous_recognition()
 
         if error_message[0]:
-            print(f"[Azure Pass 1] Transcription error: {error_message[0]}")
+            print(f"[Azure STT Fallback] Transcription error: {error_message[0]}")
             return ""
 
         full_transcript = ' '.join(all_transcripts)
-        print(f"[Azure Pass 1] Transcript: {full_transcript[:100]}..." if len(full_transcript) > 100 else f"[Azure Pass 1] Transcript: {full_transcript}")
+        print(f"[Azure STT Fallback] Transcript: {full_transcript[:100]}..." if len(full_transcript) > 100 else f"[Azure STT Fallback] Transcript: {full_transcript}")
 
         return full_transcript
 
@@ -446,7 +491,7 @@ class AzureSpeechAPI:
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
         print(f"[Azure] Processing audio file: {audio_file_path}")
-        print(f"[Azure] Using 2-pass approach (Azure recommended)")
+        print(f"[Azure] Using 2-pass approach: Whisper (Pass 1) + Azure Pronunciation (Pass 2)")
 
         # Convert to WAV if needed (WebM, MP3, etc.)
         wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
@@ -478,6 +523,7 @@ class AzureSpeechAPI:
                 granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
                 enable_miscue=True if reference_text else False  # Enable miscue only if we have reference
             )
+            pronunciation_config.phoneme_alphabet = "IPA"
             pronunciation_config.enable_prosody_assessment()
 
             # Create speech recognizer
@@ -653,6 +699,7 @@ class AzureSpeechAPI:
                 granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
                 enable_miscue=False  # Must be False for continuous recognition
             )
+            pronunciation_config.phoneme_alphabet = "IPA"
             pronunciation_config.enable_prosody_assessment()
 
             speech_recognizer = speechsdk.SpeechRecognizer(

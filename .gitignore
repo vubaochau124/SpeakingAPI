@@ -45,6 +45,7 @@ frontend/yarn-error.log*
 frontend/.pnpm-debug.log*
 frontend/dist/
 frontend/build/
+docs
 
 # Results and generated files
 results/
