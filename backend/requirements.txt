@@ -7,3 +7,6 @@ gunicorn
 openai
 azure-cognitiveservices-speech
 pydub
+noisereduce
+scipy
+numpy

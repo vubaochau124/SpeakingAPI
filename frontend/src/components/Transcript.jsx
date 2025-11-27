@@ -57,18 +57,23 @@ function Transcript({ transcript, wordList, audioData }) {
 
     if (startFrame === null || endFrame === null) return;
 
-    // Convert frames to seconds (assuming 100 frames per second / centiseconds)
-    const frameRate = 100;
-    const startTime = startFrame / frameRate;
-    const duration = (endFrame - startFrame) / frameRate;
+    // Convert milliseconds to seconds (Azure returns offset/duration in milliseconds after backend conversion)
+    const startTime = startFrame / 1000;
+    const duration = (endFrame - startFrame) / 1000;
+
+    // Add small padding for better playback
+    const paddedStart = Math.max(0, startTime - 0.05);
+    const paddedDuration = duration + 0.1;
 
     // Create source and play
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBufferRef.current;
     source.connect(audioContextRef.current.destination);
 
+    console.log(`[Play Word] Start: ${paddedStart.toFixed(3)}s, Duration: ${paddedDuration.toFixed(3)}s`);
+
     setIsPlaying(true);
-    source.start(0, startTime, duration);
+    source.start(0, paddedStart, paddedDuration);
     source.onended = () => setIsPlaying(false);
   };
 

@@ -2,10 +2,22 @@ import os
 import json
 import threading
 import tempfile
+import shutil
+import numpy as np
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Try to import audio enhancement libraries
+try:
+    import noisereduce as nr
+    from scipy.signal import butter, filtfilt
+    from scipy.io import wavfile
+    ENHANCEMENT_AVAILABLE = True
+except ImportError:
+    ENHANCEMENT_AVAILABLE = False
+    print("Warning: Audio enhancement libraries not installed. Install with: pip install noisereduce scipy numpy")
 
 # Try to import pydub for audio conversion
 try:
@@ -64,9 +76,14 @@ class AzureSpeechAPI:
         """
         ext = os.path.splitext(audio_file_path)[1].lower()
 
-        # If already WAV, no conversion needed
+        # If already WAV, still apply enhancement but no format conversion needed
         if ext == '.wav':
-            return audio_file_path, False
+            # Copy to temp file so we don't modify original
+            wav_path = tempfile.mktemp(suffix='.wav')
+            shutil.copy2(audio_file_path, wav_path)
+            # Apply audio enhancement
+            wav_path = self._enhance_audio(wav_path)
+            return wav_path, True
 
         # Check if pydub is available
         if not PYDUB_AVAILABLE:
@@ -98,11 +115,169 @@ class AzureSpeechAPI:
             audio.export(wav_path, format='wav')
 
             print(f"[Azure] Converted to WAV: {wav_path}")
+
+            # Apply audio enhancement
+            wav_path = self._enhance_audio(wav_path)
+
             return wav_path, True
 
         except Exception as e:
             print(f"[Warning] Audio conversion failed: {e}. Using original file...")
             return audio_file_path, False
+
+    def _enhance_audio(self, wav_path):
+        """Enhance audio quality before sending to Azure.
+
+        Applies 4 enhancement steps:
+        1. Noise Reduction - Remove background noise
+        2. High-pass Filter - Remove frequencies below 80Hz
+        3. Normalization - Normalize volume to -20 dBFS
+        4. Compression - Reduce dynamic range
+
+        Note: Silence trimming is NOT applied to preserve word timing for playback.
+
+        Args:
+            wav_path (str): Path to WAV file
+
+        Returns:
+            str: Path to enhanced WAV file (same path, modified in place)
+        """
+        if not ENHANCEMENT_AVAILABLE:
+            print("[Audio Enhancement] Libraries not available, skipping enhancement")
+            return wav_path
+
+        try:
+            print("[Audio Enhancement] Starting audio enhancement pipeline...")
+
+            # Read WAV file
+            sample_rate, audio_data = wavfile.read(wav_path)
+
+            # Convert to float for processing
+            if audio_data.dtype == np.int16:
+                audio_float = audio_data.astype(np.float32) / 32768.0
+            elif audio_data.dtype == np.int32:
+                audio_float = audio_data.astype(np.float32) / 2147483648.0
+            else:
+                audio_float = audio_data.astype(np.float32)
+
+            # Handle stereo - convert to mono if needed
+            if len(audio_float.shape) > 1:
+                audio_float = np.mean(audio_float, axis=1)
+
+            # Step 1: Noise Reduction
+            print("  [1/4] Applying noise reduction...")
+            audio_denoised = nr.reduce_noise(
+                y=audio_float,
+                sr=sample_rate,
+                prop_decrease=0.8,  # Reduce noise by 80%
+                stationary=True
+            )
+
+            # Step 2: High-pass Filter (80Hz) - Remove low frequency rumble
+            print("  [2/4] Applying high-pass filter (80Hz)...")
+            nyquist = sample_rate / 2
+            cutoff = 80 / nyquist
+            if cutoff < 1:  # Only apply if cutoff is valid
+                b, a = butter(4, cutoff, btype='high')
+                audio_filtered = filtfilt(b, a, audio_denoised)
+            else:
+                audio_filtered = audio_denoised
+
+            # Step 3: Normalization to -20 dBFS
+            print("  [3/4] Normalizing audio to -20 dBFS...")
+            max_val = np.max(np.abs(audio_filtered))
+            if max_val > 0:
+                target_level = 10 ** (-20 / 20)  # -20 dBFS
+                audio_normalized = audio_filtered * (target_level / max_val)
+            else:
+                audio_normalized = audio_filtered
+
+            # Step 4: Compression (soft limiting)
+            print("  [4/4] Applying dynamic compression...")
+            threshold = 0.3
+            ratio = 4.0
+            audio_compressed = np.where(
+                np.abs(audio_normalized) > threshold,
+                np.sign(audio_normalized) * (threshold + (np.abs(audio_normalized) - threshold) / ratio),
+                audio_normalized
+            )
+
+            # NOTE: Silence Trimming removed to preserve word timing for playback
+
+            # Convert back to int16
+            audio_int16 = np.clip(audio_compressed * 32768, -32768, 32767).astype(np.int16)
+
+            # Save enhanced audio back to WAV
+            wavfile.write(wav_path, sample_rate, audio_int16)
+
+            print(f"[Audio Enhancement] Complete! Duration: {len(audio_int16)/sample_rate:.2f}s")
+            return wav_path
+
+        except Exception as e:
+            print(f"[Audio Enhancement] Enhancement failed: {e}. Using original audio...")
+            return wav_path
+
+    def _transcribe_audio(self, wav_path, language='en-US'):
+        """Pass 1: Speech-to-Text only (no pronunciation assessment).
+
+        This method transcribes audio using Azure Speech-to-Text without
+        pronunciation assessment. The transcript is then used as reference
+        text for Pass 2 (pronunciation assessment).
+
+        Args:
+            wav_path (str): Path to WAV file
+            language (str): Language code (default: 'en-US')
+
+        Returns:
+            str: Transcribed text
+        """
+        print(f"[Azure Pass 1] Starting Speech-to-Text transcription...")
+
+        audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
+        speech_recognizer = speechsdk.SpeechRecognizer(
+            speech_config=self.speech_config,
+            language=language,
+            audio_config=audio_config
+        )
+
+        # Storage for continuous recognition
+        all_transcripts = []
+        done = threading.Event()
+        error_message = [None]
+
+        def on_recognized(evt):
+            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                all_transcripts.append(evt.result.text)
+                print(f"  [Segment] {evt.result.text[:60]}..." if len(evt.result.text) > 60 else f"  [Segment] {evt.result.text}")
+
+        def on_canceled(evt):
+            if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
+                error_message[0] = evt.cancellation_details.error_details
+                print(f"  [Error] {error_message[0]}")
+            done.set()
+
+        def on_session_stopped(evt):
+            print("  [Session] Transcription complete")
+            done.set()
+
+        # Connect handlers
+        speech_recognizer.recognized.connect(on_recognized)
+        speech_recognizer.canceled.connect(on_canceled)
+        speech_recognizer.session_stopped.connect(on_session_stopped)
+
+        # Start continuous recognition
+        speech_recognizer.start_continuous_recognition()
+        done.wait(timeout=120)
+        speech_recognizer.stop_continuous_recognition()
+
+        if error_message[0]:
+            print(f"[Azure Pass 1] Transcription error: {error_message[0]}")
+            return ""
+
+        full_transcript = ' '.join(all_transcripts)
+        print(f"[Azure Pass 1] Transcript: {full_transcript[:100]}..." if len(full_transcript) > 100 else f"[Azure Pass 1] Transcript: {full_transcript}")
+
+        return full_transcript
 
     def _map_azure_to_frontend_word(self, azure_word):
         """Map Azure word result to frontend-expected word format"""
@@ -262,11 +437,16 @@ class AzureSpeechAPI:
                     detect_dialect=1,
                     enforce_dialect=1,
                     include_ielts_feedback=1):
-        """Evaluate unscripted speech using CONTINUOUS recognition for full audio"""
+        """Evaluate speech using 2-pass approach (Azure recommended).
+
+        Pass 1: Speech-to-Text to get transcript
+        Pass 2: Pronunciation Assessment with transcript as reference text
+        """
         if not os.path.exists(audio_file_path):
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
         print(f"[Azure] Processing audio file: {audio_file_path}")
+        print(f"[Azure] Using 2-pass approach (Azure recommended)")
 
         # Convert to WAV if needed (WebM, MP3, etc.)
         wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
@@ -275,15 +455,28 @@ class AzureSpeechAPI:
         language = 'en-US' if dialect.lower() in ['en-us', 'en_us'] else 'en-GB' if dialect.lower() in ['en-gb', 'en_gb'] else 'en-US'
 
         try:
+            # ========== PASS 1: Speech-to-Text (get transcript) ==========
+            transcript = self._transcribe_audio(wav_path, language)
+
+            if not transcript:
+                print("[Azure] Pass 1 failed - no transcript. Falling back to unscripted mode.")
+                reference_text = ""
+            else:
+                reference_text = transcript
+                print(f"[Azure] Pass 1 complete. Reference text: {reference_text[:80]}...")
+
+            # ========== PASS 2: Pronunciation Assessment ==========
+            print(f"[Azure Pass 2] Starting Pronunciation Assessment...")
+
             # Configure audio with WAV file
             audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
 
-            # Configure pronunciation assessment for unscripted
+            # Configure pronunciation assessment with reference text from Pass 1
             pronunciation_config = speechsdk.PronunciationAssessmentConfig(
-                reference_text="",
+                reference_text=reference_text,
                 grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
                 granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
-                enable_miscue=False
+                enable_miscue=True if reference_text else False  # Enable miscue only if we have reference
             )
             pronunciation_config.enable_prosody_assessment()
 
@@ -345,8 +538,8 @@ class AzureSpeechAPI:
             speech_recognizer.canceled.connect(on_canceled)
             speech_recognizer.session_stopped.connect(on_session_stopped)
 
-            # Start continuous recognition
-            print("[Azure] Starting continuous recognition...")
+            # Start continuous recognition for Pass 2
+            print("[Azure Pass 2] Starting pronunciation assessment...")
             speech_recognizer.start_continuous_recognition()
 
             # Wait for completion (2 minute timeout)
@@ -358,7 +551,7 @@ class AzureSpeechAPI:
 
             # Combine results
             full_transcript = ' '.join(all_transcripts)
-            print(f"\n[Azure] Total segments: {len(all_results)}, Total words: {len(all_words)}")
+            print(f"\n[Azure Pass 2] Total segments: {len(all_results)}, Total words: {len(all_words)}")
 
             # Calculate average scores
             accuracy_score = sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0
