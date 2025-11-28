@@ -70,17 +70,17 @@ class OpenAIEvaluator:
         improved_answer = self._generate_improved_answer(transcript, question, result)
         result['improved_answer'] = improved_answer
 
-        # Step 3: Calculate OpenAI overall score
-        enhanced_ielts = result.get('enhanced_ielts', {})
-        grammar_score = enhanced_ielts.get('grammar', 0) or 0
-        vocab_score = enhanced_ielts.get('vocab', 0) or 0
-        coherence_score = enhanced_ielts.get('coherence', 0) or 0
+        # Step 3: Extract scores (already 0-100 from prompt)
+        scores = result.get('scores', {})
+        grammar_score = scores.get('grammar', 0) or 0
+        vocab_score = scores.get('vocab', 0) or 0
+        coherence_score = scores.get('coherence', 0) or 0
 
-        # Convert IELTS 0-9 to 0-100 and calculate weighted average
+        # Calculate weighted average
         total_score = (
-            (grammar_score * 10) * 0.35 +
-            (vocab_score * 10) * 0.35 +
-            (coherence_score * 10) * 0.30
+            grammar_score * 0.35 +
+            vocab_score * 0.35 +
+            coherence_score * 0.30
         )
 
         # Assign grade
@@ -107,9 +107,9 @@ class OpenAIEvaluator:
             grade = 'D'
 
         result['openai_overall_score'] = {
-            'grammar_score': grammar_score * 10,
-            'vocab_score': vocab_score * 10,
-            'coherence_score': coherence_score * 10,
+            'grammar_score': grammar_score,
+            'vocab_score': vocab_score,
+            'coherence_score': coherence_score,
             'total_score': round(total_score, 2),
             'grade': grade
         }
@@ -150,10 +150,10 @@ Please provide a JSON response with:
     "<e.g., Replaced vague 'thing' with specific 'concept'>",
     "<e.g., Added connective 'however' to improve coherence>"
   ],
-  "estimated_ielts": {{
-    "grammar": <0-9 score for improved version>,
-    "vocab": <0-9 score for improved version>,
-    "coherence": <0-9 score for improved version>
+  "estimated_scores": {{
+    "grammar": <integer 0-100 for improved version>,
+    "vocab": <integer 0-100 for improved version>,
+    "coherence": <integer 0-100 for improved version>
   }}
 }}
 
@@ -300,10 +300,10 @@ Return a JSON object with this EXACT structure:
   },
 """
 
-        prompt += """  "enhanced_ielts": {
-    "grammar": <number 0-9 in 0.5 increments>,
-    "vocab": <number 0-9 in 0.5 increments>,
-    "coherence": <number 0-9 in 0.5 increments>
+        prompt += """  "scores": {
+    "grammar": <integer 0-100>,
+    "vocab": <integer 0-100>,
+    "coherence": <integer 0-100>
   }
 }
 

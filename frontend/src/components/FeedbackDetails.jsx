@@ -8,7 +8,6 @@ function FeedbackDetails({
   wordList,
 }) {
   const [activeTab, setActiveTab] = useState("grammar");
-  const [showNotablePauses, setShowNotablePauses] = useState(false);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
 
   // Metric descriptions for tooltip
@@ -38,8 +37,6 @@ function FeedbackDetails({
     "Articulation Rate": "Syllables per second when actually speaking (excluding pauses).",
     "Syllables Correct Per Minute": "Number of correctly pronounced syllables per minute.",
     "Words Correct Per Minute": "Number of correctly pronounced words per minute.",
-    "Pause Count": "Total number of pauses detected in your speech.",
-    "Total Pause Duration": "Combined duration of all pauses in seconds.",
   };
 
   const getLevelColor = (level) => {
@@ -254,66 +251,10 @@ function FeedbackDetails({
             1
           )} correct words per minute`,
         },
-        {
-          name: "Pause Count",
-          score: fluency.overall_metrics.all_pause_count || 0,
-          message: `${
-            fluency.overall_metrics.all_pause_count || 0
-          } pauses detected`,
-        },
-        {
-          name: "Total Pause Duration",
-          score: fluency.overall_metrics.all_pause_duration?.toFixed(2) || 0,
-          message: `${fluency.overall_metrics.all_pause_duration?.toFixed(
-            2
-          )} seconds total pause time`,
-        },
       ]
     : [];
 
   const grammarErrors = grammar?.errors || [];
-
-  const getPauseBetweenWords = (pauseStart, pauseEnd) => {
-    if (!wordList || wordList.length === 0) return null;
-
-    let wordBefore = null;
-    let wordAfter = null;
-
-    for (let i = 0; i < wordList.length; i++) {
-      const word = wordList[i];
-      let wordEnd = null;
-
-      if (word.syllable_score_list && word.syllable_score_list.length > 0) {
-        const lastSyllable =
-          word.syllable_score_list[word.syllable_score_list.length - 1];
-        wordEnd = lastSyllable.extent[1];
-      } else if (word.phone_score_list && word.phone_score_list.length > 0) {
-        const lastPhone =
-          word.phone_score_list[word.phone_score_list.length - 1];
-        wordEnd = lastPhone.extent[1];
-      }
-
-      if (wordEnd && wordEnd <= pauseStart) {
-        wordBefore = word.word;
-      }
-
-      if (word.syllable_score_list && word.syllable_score_list.length > 0) {
-        const wordStart = word.syllable_score_list[0].extent[0];
-        if (wordStart >= pauseEnd && !wordAfter) {
-          wordAfter = word.word;
-          break;
-        }
-      } else if (word.phone_score_list && word.phone_score_list.length > 0) {
-        const wordStart = word.phone_score_list[0].extent[0];
-        if (wordStart >= pauseEnd && !wordAfter) {
-          wordAfter = word.word;
-          break;
-        }
-      }
-    }
-
-    return { wordBefore, wordAfter };
-  };
 
   const tabs = [
     { id: "grammar", label: "Grammar", icon: "📝", metrics: grammarMetrics },
@@ -410,8 +351,6 @@ function FeedbackDetails({
                       <li><span className="text-white font-medium">Articulation Rate:</span> {metricDescriptions["Articulation Rate"]}</li>
                       <li><span className="text-white font-medium">Syllables/Min:</span> {metricDescriptions["Syllables Correct Per Minute"]}</li>
                       <li><span className="text-white font-medium">Words/Min:</span> {metricDescriptions["Words Correct Per Minute"]}</li>
-                      <li><span className="text-white font-medium">Pause Count:</span> {metricDescriptions["Pause Count"]}</li>
-                      <li><span className="text-white font-medium">Pause Duration:</span> {metricDescriptions["Total Pause Duration"]}</li>
                     </ul>
                   </div>
                 </div>
@@ -483,158 +422,6 @@ function FeedbackDetails({
                   ))}
                 </div>
 
-                {/* Notable Pauses */}
-                {fluency?.overall_metrics?.all_pause_list &&
-                  (() => {
-                    const notablePauses =
-                      fluency.overall_metrics.all_pause_list.filter((pause) => {
-                        const duration = (pause[1] - pause[0]) / 100;
-                        return duration > 0.3;
-                      });
-
-                    return (
-                      notablePauses.length > 0 && (
-                        <div className="bg-slate-800/30 rounded-xl border border-slate-700/50 overflow-hidden">
-                          <button
-                            onClick={() =>
-                              setShowNotablePauses(!showNotablePauses)
-                            }
-                            className="w-full flex items-center justify-between p-5 hover:bg-slate-700/30 transition-all duration-300 group"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-10 h-10 rounded-lg ${
-                                  showNotablePauses
-                                    ? "bg-cyan-500/20"
-                                    : "bg-slate-700"
-                                } flex items-center justify-center transition-all duration-300 group-hover:scale-110`}
-                              >
-                                <span className="text-xl">
-                                  {showNotablePauses ? "📂" : "📁"}
-                                </span>
-                              </div>
-                              <div className="text-left">
-                                <h4 className="text-lg font-bold text-white">
-                                  Notable Pauses
-                                </h4>
-                                <p className="text-sm text-slate-400">
-                                  {notablePauses.length} pauses longer than 0.3s
-                                  detected
-                                </p>
-                              </div>
-                            </div>
-                            <div
-                              className={`transition-transform duration-300 ${
-                                showNotablePauses ? "rotate-180" : ""
-                              }`}
-                            >
-                              <svg
-                                className="w-5 h-5 text-slate-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M19 9l-7 7-7-7"
-                                />
-                              </svg>
-                            </div>
-                          </button>
-
-                          {showNotablePauses && (
-                            <div className="p-5 pt-0 space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                              {notablePauses.map((pause, idx) => {
-                                const pauseStart = pause[0];
-                                const pauseEnd = pause[1];
-                                const duration = (
-                                  (pauseEnd - pauseStart) /
-                                  100
-                                ).toFixed(2);
-                                const wordsInfo = getPauseBetweenWords(
-                                  pauseStart,
-                                  pauseEnd
-                                );
-
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="group p-4 rounded-lg bg-gradient-to-r from-slate-700/30 to-slate-700/10 border border-slate-600/30 hover:border-cyan-500/30 hover:from-cyan-500/5 hover:to-blue-500/5 transition-all duration-300"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold text-sm">
-                                        {idx + 1}
-                                      </div>
-
-                                      {wordsInfo ? (
-                                        <div className="flex-1 flex items-center gap-2 text-sm flex-wrap">
-                                          {wordsInfo.wordBefore && (
-                                            <span className="px-2 py-1 bg-slate-600/50 text-white font-medium rounded">
-                                              "{wordsInfo.wordBefore}"
-                                            </span>
-                                          )}
-                                          <svg
-                                            className="w-4 h-4 text-slate-500"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                              strokeWidth="2"
-                                              d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                            />
-                                          </svg>
-                                          <div className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
-                                            <span className="text-cyan-400 font-bold text-base">
-                                              ⏸
-                                            </span>
-                                            <span className="text-cyan-300 font-bold">
-                                              {duration}s
-                                            </span>
-                                          </div>
-                                          <svg
-                                            className="w-4 h-4 text-slate-500"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                          >
-                                            <path
-                                              strokeLinecap="round"
-                                              strokeLinejoin="round"
-                                              strokeWidth="2"
-                                              d="M13 7l5 5m0 0l-5 5m5-5H6"
-                                            />
-                                          </svg>
-                                          {wordsInfo.wordAfter && (
-                                            <span className="px-2 py-1 bg-slate-600/50 text-white font-medium rounded">
-                                              "{wordsInfo.wordAfter}"
-                                            </span>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="flex-1">
-                                          <span className="text-cyan-400 font-bold">
-                                            {duration}s
-                                          </span>
-                                          <span className="text-slate-400 text-sm ml-2">
-                                            pause
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    );
-                  })()}
               </>
             ) : (
               <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700/50">

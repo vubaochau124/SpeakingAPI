@@ -157,13 +157,12 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
   return (
     <div className="space-y-6">
-      {/* IELTS Score */}
-      {textScore?.ielts_score && (
+      {/* Speech Score */}
+      {textScore?.scores && (
         <IELTSScore
-          ieltsScore={textScore.ielts_score}
+          scores={textScore.scores}
           title="Part 1 Score"
           detectedDialect={textScore?.detected_dialect?.lang_id}
-          azureScores={textScore?.azure_scores}
         />
       )}
 

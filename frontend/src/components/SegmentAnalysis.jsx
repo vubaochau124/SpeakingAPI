@@ -3,15 +3,16 @@ function SegmentAnalysis({ segmentMetrics }) {
     return null;
   }
 
+  // Color functions for 0-100 scale
   const getScoreColor = (score) => {
-    if (score >= 7) return 'bg-emerald-500';
-    if (score >= 5.5) return 'bg-amber-500';
+    if (score >= 80) return 'bg-emerald-500';
+    if (score >= 60) return 'bg-amber-500';
     return 'bg-red-500';
   };
 
   const getScoreTextColor = (score) => {
-    if (score >= 7) return 'text-emerald-400';
-    if (score >= 5.5) return 'text-amber-400';
+    if (score >= 80) return 'text-emerald-400';
+    if (score >= 60) return 'text-amber-400';
     return 'text-red-400';
   };
 
@@ -21,7 +22,7 @@ function SegmentAnalysis({ segmentMetrics }) {
   return (
     <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
       <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-        <span>=�</span> Segment-by-Segment Analysis
+        <span>=</span> Segment-by-Segment Analysis
       </h3>
 
       {/* Timeline Visualization */}
@@ -29,15 +30,16 @@ function SegmentAnalysis({ segmentMetrics }) {
         <div className="flex items-center gap-1 h-12 rounded-lg overflow-hidden border border-slate-700">
           {segmentMetrics.map((segment, index) => {
             const widthPercent = ((segment.duration || 1) / totalDuration) * 100;
-            // Calculate average IELTS score from segment
+            // Calculate average score from segment (0-100 scale)
             const getSegmentScore = () => {
-              if (segment.ielts_score) {
+              if (segment.scores) {
                 const scores = [
-                  segment.ielts_score.pronunciation,
-                  segment.ielts_score.fluency,
-                  segment.ielts_score.grammar,
-                  segment.ielts_score.coherence,
-                  segment.ielts_score.vocab
+                  segment.scores.pronunciation,
+                  segment.scores.fluency,
+                  segment.scores.accuracy,
+                  segment.scores.grammar,
+                  segment.scores.coherence,
+                  segment.scores.vocab
                 ].filter(s => s != null);
                 return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
               }
@@ -68,15 +70,16 @@ function SegmentAnalysis({ segmentMetrics }) {
       {/* Segment List */}
       <div className="space-y-3 max-h-96 overflow-y-auto">
         {segmentMetrics.map((segment, index) => {
-          // Calculate average IELTS score from segment
+          // Calculate average score from segment (0-100 scale)
           const getSegmentScore = () => {
-            if (segment.ielts_score) {
+            if (segment.scores) {
               const scores = [
-                segment.ielts_score.pronunciation,
-                segment.ielts_score.fluency,
-                segment.ielts_score.grammar,
-                segment.ielts_score.coherence,
-                segment.ielts_score.vocab
+                segment.scores.pronunciation,
+                segment.scores.fluency,
+                segment.scores.accuracy,
+                segment.scores.grammar,
+                segment.scores.coherence,
+                segment.scores.vocab
               ].filter(s => s != null);
               return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
             }
@@ -110,31 +113,37 @@ function SegmentAnalysis({ segmentMetrics }) {
               </div>
 
               {/* Additional Metrics if available */}
-              {segment.ielts_score && (
+              {segment.scores && (
                 <div className="mt-3 pt-3 border-t border-slate-600/30">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    {segment.ielts_score.pronunciation != null && (
+                    {segment.scores.pronunciation != null && (
                       <div>
                         <p className="text-slate-500">Pronunciation</p>
-                        <p className="text-white font-medium">{segment.ielts_score.pronunciation.toFixed(1)}</p>
+                        <p className="text-white font-medium">{segment.scores.pronunciation.toFixed(1)}</p>
                       </div>
                     )}
-                    {segment.ielts_score.fluency != null && (
+                    {segment.scores.fluency != null && (
                       <div>
                         <p className="text-slate-500">Fluency</p>
-                        <p className="text-white font-medium">{segment.ielts_score.fluency.toFixed(1)}</p>
+                        <p className="text-white font-medium">{segment.scores.fluency.toFixed(1)}</p>
                       </div>
                     )}
-                    {segment.ielts_score.grammar != null && (
+                    {segment.scores.accuracy != null && (
+                      <div>
+                        <p className="text-slate-500">Accuracy</p>
+                        <p className="text-white font-medium">{segment.scores.accuracy.toFixed(1)}</p>
+                      </div>
+                    )}
+                    {segment.scores.grammar != null && (
                       <div>
                         <p className="text-slate-500">Grammar</p>
-                        <p className="text-white font-medium">{segment.ielts_score.grammar.toFixed(1)}</p>
+                        <p className="text-white font-medium">{segment.scores.grammar.toFixed(1)}</p>
                       </div>
                     )}
-                    {segment.ielts_score.coherence != null && (
+                    {segment.scores.coherence != null && (
                       <div>
                         <p className="text-slate-500">Coherence</p>
-                        <p className="text-white font-medium">{segment.ielts_score.coherence.toFixed(1)}</p>
+                        <p className="text-white font-medium">{segment.scores.coherence.toFixed(1)}</p>
                       </div>
                     )}
                   </div>
@@ -149,13 +158,13 @@ function SegmentAnalysis({ segmentMetrics }) {
       <div className="mt-4 flex items-center gap-4 text-xs text-slate-400 p-3 bg-slate-700/20 rounded-lg">
         <span className="font-semibold">Score Legend:</span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-emerald-500"></span> Good (e7.0)
+          <span className="w-3 h-3 rounded-full bg-emerald-500"></span> Good (80+)
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-amber-500"></span> Fair (5.5-7.0)
+          <span className="w-3 h-3 rounded-full bg-amber-500"></span> Fair (60-80)
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-red-500"></span> Needs Work (&lt;5.5)
+          <span className="w-3 h-3 rounded-full bg-red-500"></span> Needs Work (&lt;60)
         </span>
       </div>
     </div>

@@ -662,11 +662,6 @@ class AzureSpeechAPI:
             # Build word_score_list
             word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
 
-            # Convert to IELTS
-            ielts_pronunciation = self._azure_score_to_ielts(accuracy_score)
-            ielts_fluency = self._azure_score_to_ielts(fluency_score)
-            ielts_prosody = self._azure_score_to_ielts(prosody_score)
-
             # Fluency metrics
             fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
 
@@ -675,19 +670,13 @@ class AzureSpeechAPI:
                 'speech_score': {
                     'transcript': full_transcript,
                     'word_score_list': word_score_list,
-                    'ielts_score': {
-                        'pronunciation': ielts_pronunciation,
-                        'fluency': ielts_fluency,
-                        'prosody': ielts_prosody,
-                        'grammar': None,
-                        'vocab': None,
-                        'coherence': None
-                    },
-                    'azure_scores': {
-                        'accuracy': round(accuracy_score, 1),
-                        'fluency': round(fluency_score, 1),
-                        'prosody': round(prosody_score, 1),
-                        'pronunciation': round(pronunciation_score, 1)
+                    'scores': {
+                        'pronunciation': round(pronunciation_score, 1),  # PronScore
+                        'fluency': round(fluency_score, 1),              # FluencyScore
+                        'accuracy': round(accuracy_score, 1),            # AccuracyScore
+                        'grammar': None,      # Will be filled by OpenAI
+                        'vocab': None,        # Will be filled by OpenAI
+                        'coherence': None     # Will be filled by OpenAI
                     },
                     'fluency': fluency_metrics,
                     'detected_dialect': {'lang_id': language}
@@ -705,7 +694,7 @@ class AzureSpeechAPI:
                     'speech_score': {
                         'transcript': '',
                         'word_score_list': [],
-                        'ielts_score': {'pronunciation': 0, 'fluency': 0, 'grammar': None, 'vocab': None, 'coherence': None}
+                        'scores': {'pronunciation': 0, 'fluency': 0, 'accuracy': 0, 'grammar': None, 'vocab': None, 'coherence': None}
                     }
                 }
 
@@ -832,10 +821,6 @@ class AzureSpeechAPI:
 
             word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
 
-            ielts_pronunciation = self._azure_score_to_ielts(accuracy_score)
-            ielts_fluency = self._azure_score_to_ielts(fluency_score)
-            ielts_completeness = self._azure_score_to_ielts(completeness_score)
-
             fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
 
             response = {
@@ -844,17 +829,11 @@ class AzureSpeechAPI:
                     'transcript': full_transcript,
                     'reference_text': text,
                     'word_score_list': word_score_list,
-                    'ielts_score': {
-                        'pronunciation': ielts_pronunciation,
-                        'fluency': ielts_fluency,
-                        'completeness': ielts_completeness
-                    },
-                    'azure_scores': {
-                        'accuracy': round(accuracy_score, 1),
+                    'scores': {
+                        'pronunciation': round(pronunciation_score, 1),
                         'fluency': round(fluency_score, 1),
-                        'prosody': round(prosody_score, 1),
-                        'completeness': round(completeness_score, 1),
-                        'pronunciation': round(pronunciation_score, 1)
+                        'accuracy': round(accuracy_score, 1),
+                        'completeness': round(completeness_score, 1)
                     },
                     'fluency': fluency_metrics,
                     'detected_dialect': {'lang_id': language}
@@ -872,7 +851,7 @@ class AzureSpeechAPI:
                         'transcript': '',
                         'reference_text': text,
                         'word_score_list': [],
-                        'ielts_score': {'pronunciation': 0, 'fluency': 0, 'completeness': 0}
+                        'scores': {'pronunciation': 0, 'fluency': 0, 'accuracy': 0, 'completeness': 0}
                     }
                 }
 

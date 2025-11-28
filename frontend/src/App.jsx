@@ -232,13 +232,12 @@ function App() {
                   </div>
                 )}
 
-                {/* IELTS Score */}
-                {unscriptedResults.speech_score?.ielts_score && (
+                {/* Speech Score */}
+                {unscriptedResults.speech_score?.scores && (
                   <IELTSScore
-                    ieltsScore={unscriptedResults.speech_score.ielts_score}
+                    scores={unscriptedResults.speech_score.scores}
                     title="Part 2 Score"
                     detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
-                    azureScores={unscriptedResults.speech_score?.azure_scores}
                   />
                 )}
 

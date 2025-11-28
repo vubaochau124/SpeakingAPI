@@ -105,55 +105,47 @@ def calculate_azure_score(results):
         dict: Overall scores
     """
     speech_score = results.get('speech_score', {})
-    azure_scores = speech_score.get('azure_scores', {})
-    ielts = speech_score.get('ielts_score', {})
+    scores = speech_score.get('scores', {})
 
-    # Use Azure's 0-100 scores directly
-    accuracy = azure_scores.get('accuracy', 0)
-    fluency = azure_scores.get('fluency', 0)
-    prosody = azure_scores.get('prosody', 0)
+    # Get scores (already 0-100)
+    pronunciation = scores.get('pronunciation', 0) or 0
+    fluency = scores.get('fluency', 0) or 0
+    accuracy = scores.get('accuracy', 0) or 0
 
-    # Calculate total from Azure scores
-    total_azure = (accuracy * 0.4 + fluency * 0.3 + prosody * 0.3)
+    # Calculate total score
+    total = (pronunciation * 0.4 + fluency * 0.3 + accuracy * 0.3)
 
-    # Also calculate from IELTS scores (0-9 scale, convert to 0-100)
-    ielts_pronunciation = ielts.get('pronunciation', 0) or 0
-    ielts_fluency = ielts.get('fluency', 0) or 0
-
-    scores = {
-        'azure_accuracy': accuracy,
-        'azure_fluency': fluency,
-        'azure_prosody': prosody,
-        'pronunciation_score': ielts_pronunciation * 10,  # Convert 0-9 to 0-90
-        'fluency_score': ielts_fluency * 10,
-        'total_score': round(total_azure, 2),
+    result = {
+        'pronunciation': pronunciation,
+        'fluency': fluency,
+        'accuracy': accuracy,
+        'total_score': round(total, 2),
         'grade': ''
     }
 
     # Assign grade based on total
-    total = scores['total_score']
     if total >= 90:
-        scores['grade'] = 'A+'
+        result['grade'] = 'A+'
     elif total >= 85:
-        scores['grade'] = 'A'
+        result['grade'] = 'A'
     elif total >= 80:
-        scores['grade'] = 'A-'
+        result['grade'] = 'A-'
     elif total >= 75:
-        scores['grade'] = 'B+'
+        result['grade'] = 'B+'
     elif total >= 70:
-        scores['grade'] = 'B'
+        result['grade'] = 'B'
     elif total >= 65:
-        scores['grade'] = 'B-'
+        result['grade'] = 'B-'
     elif total >= 60:
-        scores['grade'] = 'C+'
+        result['grade'] = 'C+'
     elif total >= 55:
-        scores['grade'] = 'C'
+        result['grade'] = 'C'
     elif total >= 50:
-        scores['grade'] = 'C-'
+        result['grade'] = 'C-'
     else:
-        scores['grade'] = 'D'
+        result['grade'] = 'D'
 
-    return scores
+    return result
 
 
 @app.get("/api/health")
@@ -355,7 +347,7 @@ async def evaluate_audio(
                     'vocab': enhanced.get('vocab', {}),
                     'coherence': enhanced.get('coherence', {}),
                     'relevance': enhanced.get('relevance', {}),
-                    'enhanced_ielts': enhanced.get('enhanced_ielts', {}),
+                    'scores': enhanced.get('scores', {}),
                     'timestamp': datetime.now().isoformat()
                 }
                 openai_result_path = os.path.join(RESULTS_FOLDER, 'openai_result.json')
@@ -397,15 +389,15 @@ async def evaluate_audio(
                         results['speech_score']['improved_answer'] = enhanced['improved_answer']
                         print(" Improved answer suggestion added")
 
-                    # Update IELTS scores with OpenAI's assessment
-                    if 'enhanced_ielts' in enhanced and 'ielts_score' in results['speech_score']:
-                        if 'grammar' in enhanced['enhanced_ielts']:
-                            results['speech_score']['ielts_score']['grammar'] = enhanced['enhanced_ielts']['grammar']
-                        if 'vocab' in enhanced['enhanced_ielts']:
-                            results['speech_score']['ielts_score']['vocab'] = enhanced['enhanced_ielts']['vocab']
-                        if 'coherence' in enhanced['enhanced_ielts']:
-                            results['speech_score']['ielts_score']['coherence'] = enhanced['enhanced_ielts']['coherence']
-                        print(" IELTS scores updated with OpenAI assessment")
+                    # Update scores with OpenAI's assessment (0-100)
+                    if 'scores' in enhanced and 'scores' in results['speech_score']:
+                        if 'grammar' in enhanced['scores']:
+                            results['speech_score']['scores']['grammar'] = enhanced['scores']['grammar']
+                        if 'vocab' in enhanced['scores']:
+                            results['speech_score']['scores']['vocab'] = enhanced['scores']['vocab']
+                        if 'coherence' in enhanced['scores']:
+                            results['speech_score']['scores']['coherence'] = enhanced['scores']['coherence']
+                        print(" Scores updated with OpenAI assessment")
 
                 # Calculate combined score
                 combined_score = {

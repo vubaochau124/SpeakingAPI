@@ -7,7 +7,7 @@ const ImprovedAnswer = ({ improvedAnswerData, originalTranscript }) => {
     return null;
   }
 
-  const { improved_answer, improvements_made, estimated_ielts } = improvedAnswerData;
+  const { improved_answer, improvements_made, estimated_scores } = improvedAnswerData;
 
   return (
     <div className="my-6 w-full">
@@ -50,21 +50,24 @@ const ImprovedAnswer = ({ improvedAnswerData, originalTranscript }) => {
             </div>
           </div>
 
-          {estimated_ielts && (
+          {estimated_scores && (
             <div className="bg-slate-900/50 rounded-xl p-5 mb-5 shadow-lg border border-slate-700/50">
-              <h4 className="text-base font-semibold text-slate-300 mb-4">Estimated IELTS Scores (Improved Version)</h4>
+              <h4 className="text-base font-semibold text-slate-300 mb-4">Estimated Scores (Improved Version)</h4>
               <div className="flex flex-wrap gap-4">
                 <div className="flex flex-col items-center bg-gradient-to-br from-purple-500 to-indigo-600 px-6 py-4 rounded-xl min-w-[120px] shadow-lg">
                   <span className="text-white/90 text-xs font-medium uppercase tracking-wider mb-2">Grammar</span>
-                  <span className="text-white text-3xl font-bold">{estimated_ielts.grammar}</span>
+                  <span className="text-white text-3xl font-bold">{estimated_scores.grammar}</span>
+                  <span className="text-white/60 text-xs mt-1">/100</span>
                 </div>
                 <div className="flex flex-col items-center bg-gradient-to-br from-purple-500 to-indigo-600 px-6 py-4 rounded-xl min-w-[120px] shadow-lg">
                   <span className="text-white/90 text-xs font-medium uppercase tracking-wider mb-2">Vocabulary</span>
-                  <span className="text-white text-3xl font-bold">{estimated_ielts.vocab}</span>
+                  <span className="text-white text-3xl font-bold">{estimated_scores.vocab}</span>
+                  <span className="text-white/60 text-xs mt-1">/100</span>
                 </div>
                 <div className="flex flex-col items-center bg-gradient-to-br from-purple-500 to-indigo-600 px-6 py-4 rounded-xl min-w-[120px] shadow-lg">
                   <span className="text-white/90 text-xs font-medium uppercase tracking-wider mb-2">Coherence</span>
-                  <span className="text-white text-3xl font-bold">{estimated_ielts.coherence}</span>
+                  <span className="text-white text-3xl font-bold">{estimated_scores.coherence}</span>
+                  <span className="text-white/60 text-xs mt-1">/100</span>
                 </div>
               </div>
             </div>
