@@ -53,7 +53,7 @@ results/
 !package.json
 !package-lock.json
 !tsconfig.json
-!database/conversation.json
+!database/
 
 # IDE
 .vscode/

@@ -10,3 +10,8 @@ pydub
 noisereduce
 scipy
 numpy
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+bcrypt
+email-validator
