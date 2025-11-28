@@ -6,26 +6,39 @@ import Relevance from './components/Relevance';
 import IELTSScore from './components/IELTSScore';
 import FeedbackDetails from './components/FeedbackDetails';
 import ImprovedAnswer from './components/ImprovedAnswer';
+import ConversationRolePlay from './components/ConversationRolePlay';
+import ConversationResults from './components/ConversationResults';
 import axios from 'axios';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('scripted');
+  const [activeTab, setActiveTab] = useState('conversation');
   const [questions, setQuestions] = useState([]);
   const [topics, setTopics] = useState([]);
+  const [conversations, setConversations] = useState([]);
 
   useEffect(() => {
+    // Fetch questions for Part 2
     axios.get('/api/questions')
       .then(res => {
         setQuestions(res.data.questions || []);
         setTopics(res.data.topics || []);
       })
       .catch(err => console.error('Failed to load questions:', err));
+
+    // Fetch conversations for Part 1
+    axios.get('/api/conversations')
+      .then(res => {
+        setConversations(res.data.conversations || []);
+      })
+      .catch(err => console.error('Failed to load conversations:', err));
   }, []);
 
-  // Scripted (Part 1) state
-  const [scriptedResults, setScriptedResults] = useState(null);
-  const [scriptedLoading, setScriptedLoading] = useState(false);
-  const [scriptedError, setScriptedError] = useState(null);
+  // Conversation (Part 1) state
+  const [conversationResults, setConversationResults] = useState(null);
+  const [conversationTexts, setConversationTexts] = useState([]);
+  const [conversationLineAudios, setConversationLineAudios] = useState([]);
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const [conversationError, setConversationError] = useState(null);
 
   // Unscripted (Part 2) state
   const [unscriptedResults, setUnscriptedResults] = useState(null);
@@ -33,30 +46,30 @@ function App() {
   const [unscriptedError, setUnscriptedError] = useState(null);
   const [hasQuestion, setHasQuestion] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
-  const [showImprovedTranscript, setShowImprovedTranscript] = useState(false);
 
-  const handleScriptedEvaluate = async (audioFile, text, options = {}) => {
-    setScriptedLoading(true);
-    setScriptedError(null);
+  const handleConversationFinish = async (audioFile, texts, options = {}) => {
+    setConversationLoading(true);
+    setConversationError(null);
+    setConversationTexts(texts);
+    setConversationLineAudios(options.lineAudios || []);
 
     const formData = new FormData();
     formData.append('audio', audioFile);
-    formData.append('text', text);
-    formData.append('dialect', options.dialect || 'en-us');
+    formData.append('texts', JSON.stringify(texts));
 
     try {
-      const response = await axios.post('/api/evaluate-scripted', formData, {
+      const response = await axios.post('/api/evaluate-conversation', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setScriptedResults(response.data);
+      setConversationResults(response.data);
     } catch (err) {
-      setScriptedError(err.response?.data?.detail || err.message || 'Evaluation failed');
+      setConversationError(err.response?.data?.detail || err.message || 'Evaluation failed');
     } finally {
-      setScriptedLoading(false);
+      setConversationLoading(false);
     }
   };
 
-  const handleUnscriptedEvaluate = async (audioFile, question = '', options = {}) => {
+  const handleUnscriptedEvaluate = async (audioFile, question = '') => {
     setUnscriptedLoading(true);
     setUnscriptedError(null);
     setHasQuestion(!!question.trim());
@@ -64,8 +77,6 @@ function App() {
 
     const formData = new FormData();
     formData.append('audio', audioFile);
-    formData.append('dialect', options.dialect || 'en-us');
-    formData.append('pronunciation_score_mode', options.pronunciationScoreMode || 'default');
     if (question.trim()) {
       formData.append('question', question.trim());
     }
@@ -82,9 +93,11 @@ function App() {
     }
   };
 
-  const resetScripted = () => {
-    setScriptedResults(null);
-    setScriptedError(null);
+  const resetConversation = () => {
+    setConversationResults(null);
+    setConversationError(null);
+    setConversationTexts([]);
+    setConversationLineAudios([]);
   };
 
   const resetUnscripted = () => {
@@ -92,30 +105,6 @@ function App() {
     setUnscriptedError(null);
     setCurrentQuestion('');
     setHasQuestion(false);
-    setShowImprovedTranscript(false);
-  };
-
-  const handleShowImprovement = () => {
-    setShowImprovedTranscript(true);
-  };
-
-  // Apply grammar corrections to transcript
-  const getImprovedTranscript = () => {
-    if (!unscriptedResults?.speech_score?.transcript || !unscriptedResults?.speech_score?.grammar?.errors) {
-      return unscriptedResults?.speech_score?.transcript || '';
-    }
-
-    let transcript = unscriptedResults.speech_score.transcript;
-    const errors = [...unscriptedResults.speech_score.grammar.errors].sort((a, b) => b.span[0] - a.span[0]);
-
-    for (const error of errors) {
-      if (error.replacements?.[0] && error.span) {
-        const before = transcript.slice(0, error.span[0]);
-        const after = transcript.slice(error.span[1]);
-        transcript = before + error.replacements[0] + after;
-      }
-    }
-    return transcript;
   };
 
   return (
@@ -132,20 +121,20 @@ function App() {
         {/* Tab Navigation */}
         <div className="flex mb-8 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-2 shadow-xl">
           <button
-            onClick={() => setActiveTab('scripted')}
+            onClick={() => setActiveTab('conversation')}
             className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
-              activeTab === 'scripted'
+              activeTab === 'conversation'
                 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             }`}
           >
             <div className="flex items-center justify-center gap-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Part 1: Read Aloud
+              Part 1: Conversation
             </div>
-            {scriptedResults && <span className="ml-2 text-green-300">✓</span>}
+            {conversationResults && <span className="ml-2 text-green-300">✓</span>}
           </button>
           <button
             onClick={() => setActiveTab('unscripted')}
@@ -165,222 +154,35 @@ function App() {
           </button>
         </div>
 
-        {/* Scripted Tab Content */}
-        {activeTab === 'scripted' && (
+        {/* Conversation Tab Content */}
+        {activeTab === 'conversation' && (
           <div className="space-y-6">
-            {!scriptedResults ? (
+            {!conversationResults ? (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-700/50">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white font-bold">1</span>
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">Read Aloud</h2>
-                    <p className="text-slate-400">Enter a paragraph and read it aloud</p>
-                  </div>
-                </div>
-                <AudioInput
-                  onEvaluate={handleScriptedEvaluate}
-                  loading={scriptedLoading}
-                  mode="scripted"
-                  buttonText="Get Feedback"
+                <ConversationRolePlay
+                  conversations={conversations}
+                  onFinish={handleConversationFinish}
+                  loading={conversationLoading}
                 />
-                {scriptedError && (
+                {conversationError && (
                   <div className="mt-4 bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl">
-                    {scriptedError}
+                    {conversationError}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* IELTS Score */}
-                {scriptedResults.text_score?.ielts_score && (
-                  <IELTSScore
-                    ieltsScore={scriptedResults.text_score.ielts_score}
-                    title="Part 1 Score"
-                    detectedDialect={scriptedResults.text_score?.detected_dialect?.lang_id}
-                    azureScores={scriptedResults.text_score?.azure_scores}
-                  />
-                )}
-
-                {/* Audio & Transcript */}
-                <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                  <h3 className="text-xl font-bold text-white mb-4">Your Recording</h3>
-                  {scriptedResults.audio_data && <AudioPlayer audioData={scriptedResults.audio_data} />}
-                </div>
-
-                {scriptedResults.text_score?.word_score_list && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                    <Transcript
-                      transcript={scriptedResults.text_score.word_score_list.map(w => w.word).join(' ')}
-                      wordList={scriptedResults.text_score.word_score_list}
-                      audioData={scriptedResults.audio_data}
-                    />
-                  </div>
-                )}
-
-                {/* Fluency Details for Part 1 */}
-                {scriptedResults.text_score?.fluency?.overall_metrics && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50 space-y-6">
-                    {/* Header */}
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
-                        🗣️
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-bold text-white">Fluency Analysis</h3>
-                        <p className="text-slate-400 text-sm">Speech rate and pause metrics</p>
-                      </div>
-                    </div>
-
-                    {/* Metrics Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {/* Speech Rate */}
-                      <div className="group p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">🚀</span>
-                          <p className="text-slate-300 text-sm font-medium">Speech Rate</p>
-                        </div>
-                        <p className="text-3xl font-bold text-emerald-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.speech_rate?.toFixed(2)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">words/second</p>
-                      </div>
-
-                      {/* Articulation Rate */}
-                      <div className="group p-5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">💬</span>
-                          <p className="text-slate-300 text-sm font-medium">Articulation Rate</p>
-                        </div>
-                        <p className="text-3xl font-bold text-cyan-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.articulation_rate?.toFixed(2)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">syllables/second</p>
-                      </div>
-
-                      {/* Syllables Per Min */}
-                      <div className="group p-5 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">📊</span>
-                          <p className="text-slate-300 text-sm font-medium">Syllables Per Min</p>
-                        </div>
-                        <p className="text-3xl font-bold text-blue-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.syllable_correct_per_minute?.toFixed(0)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">correct spm</p>
-                      </div>
-
-                      {/* Words Per Min */}
-                      <div className="group p-5 rounded-xl bg-sky-500/10 border border-sky-500/30 hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">⏱️</span>
-                          <p className="text-slate-300 text-sm font-medium">Words Per Min</p>
-                        </div>
-                        <p className="text-3xl font-bold text-sky-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.word_correct_per_minute?.toFixed(0)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">correct wpm</p>
-                      </div>
-
-                      {/* Pause Count */}
-                      <div className="group p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">⏸️</span>
-                          <p className="text-slate-300 text-sm font-medium">Pause Count</p>
-                        </div>
-                        <p className="text-3xl font-bold text-amber-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_count || 0}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">total pauses</p>
-                      </div>
-
-                      {/* Pause Duration */}
-                      <div className="group p-5 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:scale-[1.02] transition-all duration-300">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">⏳</span>
-                          <p className="text-slate-300 text-sm font-medium">Pause Duration</p>
-                        </div>
-                        <p className="text-3xl font-bold text-orange-400">
-                          {scriptedResults.text_score.fluency.overall_metrics.all_pause_duration?.toFixed(2) || '0.00'}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">total seconds</p>
-                      </div>
-                    </div>
-
-                    {/* Notable Pauses */}
-                    {scriptedResults.text_score.fluency.overall_metrics.all_pause_list && (() => {
-                      const notablePauses = scriptedResults.text_score.fluency.overall_metrics.all_pause_list.filter(pause => {
-                        const duration = (pause[1] - pause[0]) / 100;
-                        return duration > 0.3;
-                      });
-
-                      return notablePauses.length > 0 && (
-                        <div className="bg-slate-800/30 rounded-xl border border-slate-700/50 overflow-hidden">
-                          <button
-                            onClick={() => {
-                              const el = document.getElementById('scripted-pauses');
-                              if (el) el.classList.toggle('hidden');
-                            }}
-                            className="w-full flex items-center justify-between p-5 hover:bg-slate-700/30 transition-all duration-300 group"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:bg-cyan-500/20">
-                                <span className="text-xl">📁</span>
-                              </div>
-                              <div className="text-left">
-                                <h4 className="text-lg font-bold text-white">Notable Pauses</h4>
-                                <p className="text-sm text-slate-400">
-                                  {notablePauses.length} pauses longer than 0.3s detected
-                                </p>
-                              </div>
-                            </div>
-                            <svg className="w-5 h-5 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-
-                          <div id="scripted-pauses" className="hidden p-5 pt-0 space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                            {notablePauses.map((pause, idx) => {
-                              const pauseStart = pause[0];
-                              const pauseEnd = pause[1];
-                              const duration = ((pauseEnd - pauseStart) / 100).toFixed(2);
-
-                              return (
-                                <div key={idx} className="group p-4 rounded-lg bg-gradient-to-r from-slate-700/30 to-slate-700/10 border border-slate-600/30 hover:border-cyan-500/30 hover:from-cyan-500/5 hover:to-blue-500/5 transition-all duration-300">
-                                  <div className="flex items-center gap-3 mb-3">
-                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold text-sm">
-                                      {idx + 1}
-                                    </div>
-                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
-                                      <span className="text-cyan-400 font-bold text-base">⏸</span>
-                                      <span className="text-cyan-300 font-bold">{duration}s</span>
-                                    </div>
-                                    <span className="text-slate-400 text-sm">pause detected</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                <button
-                  onClick={resetScripted}
-                  className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-cyan-500/25"
-                >
-                  Try Again
-                </button>
-              </div>
+              <ConversationResults
+                results={conversationResults}
+                conversationTexts={conversationTexts}
+                lineAudios={conversationLineAudios}
+                onTryAgain={resetConversation}
+              />
             )}
 
-            {scriptedLoading && (
+            {conversationLoading && (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-cyan-500 border-t-transparent"></div>
-                <p className="mt-4 text-slate-300">Analyzing your speech...</p>
+                <p className="mt-4 text-slate-300">Analyzing your conversation...</p>
               </div>
             )}
           </div>
@@ -403,7 +205,6 @@ function App() {
                 <AudioInput
                   onEvaluate={handleUnscriptedEvaluate}
                   loading={unscriptedLoading}
-                  mode="unscripted"
                   buttonText="Get Feedback"
                   questions={questions}
                   topics={topics}
@@ -487,7 +288,6 @@ function App() {
                       coherence={unscriptedResults.speech_score.coherence}
                       fluency={unscriptedResults.speech_score.fluency}
                       wordList={unscriptedResults.speech_score.word_score_list}
-                      onShowImprovement={handleShowImprovement}
                     />
                   </div>
                 )}

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
+from pydub import AudioSegment
 
 # Load environment variables at startup
 load_dotenv(override=True)
@@ -43,6 +44,55 @@ os.makedirs(RESULTS_FOLDER, exist_ok=True)
 def allowed_file(filename: str) -> bool:
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def convert_to_wav(input_path: str) -> str:
+    """Convert audio file to WAV format for Azure Speech API compatibility.
+
+    Args:
+        input_path: Path to the input audio file
+
+    Returns:
+        Path to the converted WAV file (or original if already WAV)
+    """
+    ext = input_path.rsplit('.', 1)[1].lower() if '.' in input_path else ''
+
+    # If already WAV, return as-is
+    if ext == 'wav':
+        return input_path
+
+    try:
+        print(f"[Audio] Converting {ext} to WAV...")
+
+        # Load audio file based on format
+        if ext == 'webm':
+            audio = AudioSegment.from_file(input_path, format='webm')
+        elif ext == 'mp3':
+            audio = AudioSegment.from_mp3(input_path)
+        elif ext == 'm4a':
+            audio = AudioSegment.from_file(input_path, format='m4a')
+        elif ext == 'ogg':
+            audio = AudioSegment.from_ogg(input_path)
+        elif ext == 'aiff':
+            audio = AudioSegment.from_file(input_path, format='aiff')
+        else:
+            audio = AudioSegment.from_file(input_path)
+
+        # Convert to mono 16kHz 16-bit WAV (required for Azure Speech API)
+        audio = audio.set_channels(1)
+        audio = audio.set_frame_rate(16000)
+        audio = audio.set_sample_width(2)  # 2 bytes = 16-bit (required by Azure)
+
+        # Export as WAV with explicit PCM encoding
+        wav_path = input_path.rsplit('.', 1)[0] + '.wav'
+        audio.export(wav_path, format='wav', parameters=["-acodec", "pcm_s16le"])
+
+        print(f"[Audio] Converted to: {wav_path}")
+        return wav_path
+
+    except Exception as e:
+        print(f"[Audio] Conversion failed: {e}, using original file")
+        return input_path
 
 
 def calculate_azure_score(results):
@@ -206,12 +256,29 @@ async def get_questions():
     return {"questions": questions, "topics": sorted(topics)}
 
 
+@app.get("/api/conversations")
+async def get_conversations():
+    """Get all conversations from database"""
+    conversations_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'conversation.json')
+    with open(conversations_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    # Transform to list format with id and topic
+    conversations_list = []
+    for key, value in data.items():
+        conversations_list.append({
+            "id": key,
+            "topic": value.get("topic", ""),
+            "dialogue": value.get("dialogue", {})
+        })
+
+    return {"conversations": conversations_list}
+
+
 @app.post("/api/evaluate")
 async def evaluate_audio(
     audio: UploadFile = File(...),
-    question: Optional[str] = Form(None),
-    dialect: Optional[str] = Form("en-us"),
-    pronunciation_score_mode: Optional[str] = Form("default")
+    question: Optional[str] = Form(None)
 ):
     """Endpoint to evaluate audio file (unscripted speech)"""
 
@@ -238,10 +305,7 @@ async def evaluate_audio(
         # Get evaluation results from Azure
         results = client.score_audio(
             audio_file_path=filepath,
-            user_id="web-user",
-            dialect=dialect or "en-us",
-            relevance_context=question or "",
-            pronunciation_score_mode=pronunciation_score_mode or "default"
+            relevance_context=question or ""
         )
 
         # Store original Azure results
@@ -456,8 +520,7 @@ async def evaluate_audio(
 @app.post("/api/evaluate-scripted")
 async def evaluate_scripted(
     audio: UploadFile = File(...),
-    text: str = Form(...),
-    dialect: Optional[str] = Form("en-us")
+    text: str = Form(...)
 ):
     """Endpoint to evaluate scripted audio (reading a given text)"""
 
@@ -482,10 +545,7 @@ async def evaluate_scripted(
 
         results = client.score_text(
             audio_file_path=filepath,
-            text=text.strip(),
-            user_id="web-user",
-            dialect=dialect or "en-us",
-            include_fluency=1
+            text=text.strip()
         )
 
         # Save results to JSON file (overwrite)
@@ -515,6 +575,89 @@ async def evaluate_scripted(
     except Exception as e:
         if os.path.exists(filepath):
             os.remove(filepath)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/evaluate-conversation")
+async def evaluate_conversation(
+    audio: UploadFile = File(...),
+    texts: str = Form(...)  # JSON array of texts the user spoke
+):
+    """Endpoint to evaluate conversation roleplay audio (combined audio with multiple texts)"""
+
+    if not audio.filename:
+        raise HTTPException(status_code=400, detail="No file selected")
+
+    if not allowed_file(audio.filename):
+        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: wav, mp3, m4a, webm, ogg, aiff")
+
+    try:
+        texts_list = json.loads(texts)
+        if not texts_list or not isinstance(texts_list, list):
+            raise HTTPException(status_code=400, detail="Texts must be a non-empty JSON array")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format for texts")
+
+    # Combine all texts into one expected text
+    combined_text = " ".join(texts_list)
+
+    filename = audio.filename.replace(" ", "_")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    wav_filepath = None
+
+    try:
+        with open(filepath, "wb") as buffer:
+            content = await audio.read()
+            buffer.write(content)
+
+        # Convert to WAV for Azure compatibility
+        wav_filepath = convert_to_wav(filepath)
+
+        client = AzureSpeechAPI()
+
+        # Use score_text for scripted evaluation with combined text
+        results = client.score_text(
+            audio_file_path=wav_filepath,
+            text=combined_text.strip()
+        )
+
+        # Save results to JSON file
+        result_filepath = os.path.join(RESULTS_FOLDER, 'scripted_result.json')
+        with open(result_filepath, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+
+        # Add audio data
+        with open(filepath, 'rb') as audio_file:
+            audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
+            ext = filename.rsplit('.', 1)[1].lower()
+            mime_types = {
+                'wav': 'audio/wav',
+                'mp3': 'audio/mpeg',
+                'm4a': 'audio/mp4',
+                'webm': 'audio/webm',
+                'ogg': 'audio/ogg',
+                'aiff': 'audio/aiff'
+            }
+            mime_type = mime_types.get(ext, 'audio/wav')
+            results['audio_data'] = f"data:{mime_type};base64,{audio_data}"
+
+        # Add metadata about the individual texts
+        results['conversation_texts'] = texts_list
+
+        # Clean up files
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        if wav_filepath and wav_filepath != filepath and os.path.exists(wav_filepath):
+            os.remove(wav_filepath)
+
+        return results
+
+    except Exception as e:
+        # Clean up on error
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        if wav_filepath and wav_filepath != filepath and os.path.exists(wav_filepath):
+            os.remove(wav_filepath)
         raise HTTPException(status_code=500, detail=str(e))
 
 

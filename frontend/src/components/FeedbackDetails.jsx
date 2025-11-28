@@ -6,7 +6,6 @@ function FeedbackDetails({
   coherence,
   fluency,
   wordList,
-  onShowImprovement,
 }) {
   const [activeTab, setActiveTab] = useState("grammar");
   const [showNotablePauses, setShowNotablePauses] = useState(false);

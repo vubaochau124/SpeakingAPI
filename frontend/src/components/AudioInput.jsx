@@ -1,29 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import QuestionSelector from './QuestionSelector';
 
-function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Get Feedback', questions = [], topics = [] }) {
+function AudioInput({ onEvaluate, loading, buttonText = 'Get Feedback', questions = [], topics = [] }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [recordStatus, setRecordStatus] = useState('');
   const [fileName, setFileName] = useState('');
-  const [text, setText] = useState('');
   const [question, setQuestion] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
-  const [dialect, setDialect] = useState('en-us');
-  const [strictMode, setStrictMode] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-
-  useEffect(() => {
-    setRecordedBlob(null);
-    setUploadedFile(null);
-    setRecordStatus('');
-    setFileName('');
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
-    setAudioUrl(null);
-  }, [mode]);
 
   const startRecording = async () => {
     try {
@@ -81,52 +69,20 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
       return;
     }
 
-    const options = {
-      dialect,
-      pronunciationScoreMode: strictMode ? 'strict' : 'default'
-    };
-
-    if (mode === 'scripted') {
-      if (!text.trim()) {
-        alert('Please enter the text to read');
-        return;
-      }
-      onEvaluate(audioFile, text.trim(), options);
-    } else {
-      onEvaluate(audioFile, question, options);
-    }
+    onEvaluate(audioFile, question);
   };
 
   const hasAudio = recordedBlob || uploadedFile;
 
   return (
     <div className="space-y-6">
-      {/* Text Input for Scripted Mode */}
-      {mode === 'scripted' && (
-        <div>
-          <label className="block text-slate-300 font-medium mb-2">
-            Text to Read <span className="text-cyan-400">*</span>
-          </label>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter the paragraph you will read aloud..."
-            disabled={loading}
-            rows={4}
-            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent disabled:opacity-50 transition-all duration-300"
-          />
-        </div>
-      )}
-
-      {/* Question Input for Unscripted Mode */}
-      {mode === 'unscripted' && (
-        <QuestionSelector
-          questions={questions}
-          topics={topics}
-          onQuestionChange={setQuestion}
-          disabled={loading}
-        />
-      )}
+      {/* Question Input */}
+      <QuestionSelector
+        questions={questions}
+        topics={topics}
+        onQuestionChange={setQuestion}
+        disabled={loading}
+      />
 
       {/* Audio Input Options */}
       <div className="grid md:grid-cols-2 gap-4">
@@ -188,63 +144,10 @@ function AudioInput({ onEvaluate, loading, mode = 'unscripted', buttonText = 'Ge
         </div>
       )}
 
-      {/* Options */}
-      <div className={`grid ${mode === 'scripted' ? 'md:grid-cols-1' : 'md:grid-cols-2'} gap-4`}>
-        {/* Dialect Selection */}
-        <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
-          <label className="block text-slate-300 text-sm font-medium mb-2">🌍 Dialect</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDialect('en-us')}
-              disabled={loading}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                dialect === 'en-us'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
-              }`}
-            >
-              🇺🇸 US English
-            </button>
-            <button
-              onClick={() => setDialect('en-gb')}
-              disabled={loading}
-              className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-                dialect === 'en-gb'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
-              }`}
-            >
-              🇬🇧 UK English
-            </button>
-          </div>
-        </div>
-
-        {/* Strict Mode - Only for unscripted mode */}
-        {mode === 'unscripted' && (
-          <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
-            <label className="block text-slate-300 text-sm font-medium mb-2">⚙️ Scoring Mode</label>
-            <button
-              onClick={() => setStrictMode(!strictMode)}
-              disabled={loading}
-              className={`w-full py-2 px-4 rounded-lg font-medium transition-all ${
-                strictMode
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
-              }`}
-            >
-              {strictMode ? '🎯 Strict Mode' : '📊 Default Mode'}
-            </button>
-            <p className="text-slate-500 text-xs mt-2">
-              {strictMode ? 'Stricter pronunciation scoring' : 'Standard pronunciation scoring'}
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* Submit Button */}
       <button
         onClick={handleSubmit}
-        disabled={!hasAudio || loading || (mode === 'scripted' && !text.trim())}
+        disabled={!hasAudio || loading}
         className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-cyan-500/25"
       >
         {buttonText}

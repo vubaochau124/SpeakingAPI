@@ -474,14 +474,7 @@ class AzureSpeechAPI:
             }
         }
 
-    def score_audio(self, audio_file_path,
-                    user_id="XYZ-ABC-99001",
-                    dialect="en-us",
-                    relevance_context="",
-                    pronunciation_score_mode="default",
-                    detect_dialect=1,
-                    enforce_dialect=1,
-                    include_ielts_feedback=1):
+    def score_audio(self, audio_file_path, relevance_context=""):
         """Evaluate speech using 2-pass approach (Azure recommended).
 
         Pass 1: Speech-to-Text to get transcript
@@ -496,8 +489,8 @@ class AzureSpeechAPI:
         # Convert to WAV if needed (WebM, MP3, etc.)
         wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
 
-        # Map dialect format
-        language = 'en-US' if dialect.lower() in ['en-us', 'en_us'] else 'en-GB' if dialect.lower() in ['en-gb', 'en_gb'] else 'en-US'
+        # Default to US English
+        language = 'en-US'
 
         try:
             # ========== PASS 1: Speech-to-Text (get transcript) ==========
@@ -670,10 +663,7 @@ class AzureSpeechAPI:
                 except Exception:
                     pass
 
-    def score_text(self, audio_file_path, text,
-                   user_id="XYZ-ABC-99001",
-                   dialect="en-us",
-                   include_fluency=1):
+    def score_text(self, audio_file_path, text):
         """Evaluate scripted speech using CONTINUOUS recognition for full audio"""
         if not os.path.exists(audio_file_path):
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
@@ -687,7 +677,8 @@ class AzureSpeechAPI:
         # Convert to WAV if needed (WebM, MP3, etc.)
         wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
 
-        language = 'en-US' if dialect.lower() in ['en-us', 'en_us'] else 'en-GB' if dialect.lower() in ['en-gb', 'en_gb'] else 'en-US'
+        # Default to US English
+        language = 'en-US'
 
         try:
             audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
