@@ -28,6 +28,14 @@ except ImportError:
     PYDUB_AVAILABLE = False
     print("Warning: pydub not installed. Audio conversion unavailable. Install with: pip install pydub")
 
+# Try to import eng_to_ipa for phoneme generation fallback
+try:
+    import eng_to_ipa as ipa
+    IPA_AVAILABLE = True
+except ImportError:
+    IPA_AVAILABLE = False
+    print("Warning: eng_to_ipa not installed. Phoneme fallback unavailable. Install with: pip install eng-to-ipa")
+
 # Try to import Azure Speech SDK
 try:
     import azure.cognitiveservices.speech as speechsdk
@@ -345,11 +353,49 @@ class AzureSpeechAPI:
         # Build phone_score_list from Phonemes
         phone_score_list = []
         phonemes = word_data.get('Phonemes', [])
-        for phoneme in phonemes:
+
+        # Check if Azure returned empty phoneme names (common in continuous mode)
+        all_phonemes_empty = all(p.get('Phoneme', '') == '' for p in phonemes) if phonemes else True
+
+        # Generate expected IPA phonemes using eng_to_ipa as fallback
+        expected_phonemes = []
+        if all_phonemes_empty and IPA_AVAILABLE and word_text:
+            try:
+                ipa_transcription = ipa.convert(word_text.lower())
+                # Remove stress markers and split into individual phonemes
+                if ipa_transcription and '*' not in ipa_transcription:
+                    # IPA returns string like "hɛˈloʊ", we need to split it into individual phonemes
+                    # Remove stress markers (ˈ ˌ) and split
+                    clean_ipa = ipa_transcription.replace('ˈ', '').replace('ˌ', '').replace('ˑ', '')
+                    # Common IPA diphthongs and digraphs to keep together
+                    diphthongs = ['aɪ', 'aʊ', 'eɪ', 'oʊ', 'ɔɪ', 'ɪə', 'eə', 'ʊə', 'tʃ', 'dʒ', 'θ', 'ð', 'ŋ', 'ʃ', 'ʒ']
+                    i = 0
+                    while i < len(clean_ipa):
+                        found_diphthong = False
+                        for diph in diphthongs:
+                            if clean_ipa[i:].startswith(diph):
+                                expected_phonemes.append(diph)
+                                i += len(diph)
+                                found_diphthong = True
+                                break
+                        if not found_diphthong:
+                            if clean_ipa[i] not in ' ':
+                                expected_phonemes.append(clean_ipa[i])
+                            i += 1
+            except Exception as e:
+                print(f"[IPA Fallback] Error converting '{word_text}': {e}")
+
+        for idx, phoneme in enumerate(phonemes):
+            phoneme_text = phoneme.get('Phoneme', '')
+
+            # Use expected phoneme as fallback if Azure returned empty
+            if not phoneme_text and idx < len(expected_phonemes):
+                phoneme_text = expected_phonemes[idx]
+
             phone_data = {
-                'phone': phoneme.get('Phoneme', ''),
+                'phone': phoneme_text,
                 'quality_score': phoneme.get('PronunciationAssessment', {}).get('AccuracyScore', 0),
-                'sound_most_like': phoneme.get('Phoneme', ''),
+                'sound_most_like': phoneme_text,
                 'extent': [
                     phoneme.get('Offset', 0) // 10000,
                     (phoneme.get('Offset', 0) + phoneme.get('Duration', 0)) // 10000
@@ -360,9 +406,19 @@ class AzureSpeechAPI:
         # Build syllable_score_list from Syllables
         syllable_score_list = []
         syllables = word_data.get('Syllables', [])
+
+        # Check if Azure returned empty syllable names
+        all_syllables_empty = all(s.get('Syllable', '') == '' for s in syllables) if syllables else True
+
         for syllable in syllables:
+            syllable_text = syllable.get('Syllable', '')
+
+            # If syllable text is empty, use word_text as fallback for single syllable
+            if not syllable_text and all_syllables_empty and len(syllables) == 1:
+                syllable_text = word_text
+
             syl_data = {
-                'letters': syllable.get('Syllable', ''),
+                'letters': syllable_text,
                 'quality_score': syllable.get('PronunciationAssessment', {}).get('AccuracyScore', 0),
                 'stress_level': 0,
                 'extent': [
@@ -372,7 +428,8 @@ class AzureSpeechAPI:
             }
             syllable_score_list.append(syl_data)
 
-        if not syllable_score_list:
+        # Fallback: if no syllables or all empty, use word_text
+        if not syllable_score_list or (all_syllables_empty and syllables):
             syllable_score_list = [{
                 'letters': word_text,
                 'quality_score': accuracy,
