@@ -36,6 +36,30 @@ print(f"[STARTUP] DATABASE_URL present: {bool(os.getenv('DATABASE_URL'))}")
 try:
     init_db()
     print("[STARTUP] Database initialized successfully")
+
+    # Add missing columns if they don't exist
+    from database import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Check and add teacher_scores column
+        result = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name='assignment_results' AND column_name='teacher_scores'
+        """))
+        if not result.fetchone():
+            conn.execute(text("ALTER TABLE assignment_results ADD COLUMN teacher_scores JSONB"))
+            conn.commit()
+            print("[STARTUP] Added teacher_scores column")
+
+        # Check and add audio_filename column
+        result = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name='assignment_results' AND column_name='audio_filename'
+        """))
+        if not result.fetchone():
+            conn.execute(text("ALTER TABLE assignment_results ADD COLUMN audio_filename VARCHAR(255)"))
+            conn.commit()
+            print("[STARTUP] Added audio_filename column")
 except Exception as e:
     print(f"[STARTUP] Database initialization failed: {e}")
 
@@ -60,6 +84,10 @@ ALLOWED_EXTENSIONS = {'wav', 'mp3', 'm4a', 'webm', 'ogg', 'aiff'}
 # Results folder
 RESULTS_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'results')
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
+
+# Audio storage folder for assignment submissions
+AUDIO_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'audio_submissions')
+os.makedirs(AUDIO_FOLDER, exist_ok=True)
 
 
 def allowed_file(filename: str) -> bool:
@@ -791,6 +819,8 @@ async def get_class_assignments(
         # Check if student has completed this assignment
         is_completed = False
         assignment_result = None
+        submissions_count = 0
+
         if current_user.role == 'student':
             existing_result = db.query(AssignmentResult).filter(
                 AssignmentResult.assignment_id == a.id,
@@ -801,10 +831,19 @@ async def get_class_assignments(
                 assignment_result = {
                     "transcript": existing_result.transcript,
                     "scores": existing_result.scores,
+                    "azure_result": existing_result.azure_result,
+                    "openai_result": existing_result.openai_result,
+                    "audio_url": f"/api/audio/{existing_result.audio_filename}" if existing_result.audio_filename else None,
                     "submitted_at": existing_result.submitted_at.isoformat() if existing_result.submitted_at else None,
                     "teacher_feedback": getattr(existing_result, 'teacher_feedback', None),
+                    "teacher_scores": getattr(existing_result, 'teacher_scores', None),
                     "feedback_at": existing_result.feedback_at.isoformat() if getattr(existing_result, 'feedback_at', None) else None
                 }
+        else:
+            # For teachers/admins, count submissions
+            submissions_count = db.query(AssignmentResult).filter(
+                AssignmentResult.assignment_id == a.id
+            ).count()
 
         result.append({
             "id": a.id,
@@ -818,7 +857,8 @@ async def get_class_assignments(
             "creator_name": a.creator.username if a.creator else None,
             "created_at": a.created_at.isoformat() if a.created_at else None,
             "is_completed": is_completed,
-            "result": assignment_result
+            "result": assignment_result,
+            "submissions_count": submissions_count
         })
 
     return {"assignments": result}
@@ -1116,15 +1156,21 @@ async def submit_assignment(
             mime_type = mime_types.get(ext, 'audio/wav')
             audio_base64 = f"data:{mime_type};base64,{audio_data}"
 
-        os.remove(filepath)
-
         transcript = results.get('speech_score', {}).get('transcript', '')
+
+        # Save audio file permanently with unique name (for future use when column is added)
+        import uuid
+        audio_filename = f"{assignment_id}_{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+        permanent_audio_path = os.path.join(AUDIO_FOLDER, audio_filename)
+        import shutil
+        shutil.move(filepath, permanent_audio_path)
 
         # Save to database
         assignment_result = AssignmentResult(
             assignment_id=assignment_id,
             student_id=current_user.id,
             transcript=transcript,
+            audio_filename=audio_filename,
             azure_result=azure_original,
             openai_result=openai_enhanced_data,
             scores=scores_data
@@ -1222,6 +1268,12 @@ async def get_assignment_submissions(
     for enrollment, student in enrolled_students:
         submission = submission_map.get(student.id)
         if submission:
+            # Determine review status
+            if submission.teacher_feedback or getattr(submission, 'teacher_scores', None):
+                review_status = "reviewed"
+            else:
+                review_status = "waiting_for_teacher"
+
             student_submissions.append({
                 "id": submission.id,
                 "student_id": student.id,
@@ -1229,10 +1281,15 @@ async def get_assignment_submissions(
                 "student_email": student.email,
                 "transcript": submission.transcript,
                 "scores": submission.scores,
+                "azure_result": submission.azure_result,
+                "openai_result": submission.openai_result,
+                "audio_url": f"/api/audio/{submission.audio_filename}" if submission.audio_filename else None,
                 "submitted_at": submission.submitted_at.isoformat() if submission.submitted_at else None,
                 "teacher_feedback": submission.teacher_feedback,
+                "teacher_scores": getattr(submission, 'teacher_scores', None),
                 "feedback_at": submission.feedback_at.isoformat() if submission.feedback_at else None,
-                "status": "submitted"
+                "status": "submitted",
+                "review_status": review_status
             })
         else:
             student_submissions.append({
@@ -1242,10 +1299,15 @@ async def get_assignment_submissions(
                 "student_email": student.email,
                 "transcript": None,
                 "scores": None,
+                "azure_result": None,
+                "openai_result": None,
+                "audio_url": None,
                 "submitted_at": None,
                 "teacher_feedback": None,
+                "teacher_scores": None,
                 "feedback_at": None,
-                "status": "pending"
+                "status": "pending",
+                "review_status": None
             })
 
     return {
@@ -1292,10 +1354,19 @@ async def add_teacher_feedback(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     feedback_text = feedback_data.get('feedback', '').strip()
-    if not feedback_text:
-        raise HTTPException(status_code=400, detail="Feedback text is required")
+    teacher_scores = feedback_data.get('teacher_scores', None)
 
-    submission.teacher_feedback = feedback_text
+    # At least one of feedback or scores must be provided
+    if not feedback_text and not teacher_scores:
+        raise HTTPException(status_code=400, detail="Feedback text or scores are required")
+
+    if feedback_text:
+        submission.teacher_feedback = feedback_text
+    if teacher_scores:
+        try:
+            submission.teacher_scores = teacher_scores
+        except AttributeError:
+            pass  # Column doesn't exist yet
     submission.feedback_at = datetime.utcnow()
     db.commit()
     db.refresh(submission)
@@ -1304,8 +1375,30 @@ async def add_teacher_feedback(
         "message": "Feedback added successfully",
         "submission_id": submission.id,
         "teacher_feedback": submission.teacher_feedback,
+        "teacher_scores": getattr(submission, 'teacher_scores', None),
         "feedback_at": submission.feedback_at.isoformat() if submission.feedback_at else None
     }
+
+
+@app.get("/api/audio/{filename}")
+async def get_audio_file(
+    filename: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Serve audio files for assignment submissions"""
+    filepath = os.path.join(AUDIO_FOLDER, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    # Determine mime type
+    ext = filename.rsplit('.', 1)[-1].lower()
+    mime_types = {
+        'wav': 'audio/wav', 'mp3': 'audio/mpeg', 'm4a': 'audio/mp4',
+        'webm': 'audio/webm', 'ogg': 'audio/ogg', 'aiff': 'audio/aiff'
+    }
+    mime_type = mime_types.get(ext, 'audio/wav')
+
+    return FileResponse(filepath, media_type=mime_type)
 
 
 # ==================== ADMIN ENDPOINTS ====================

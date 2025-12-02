@@ -136,11 +136,13 @@ class AssignmentResult(Base):
     assignment_id = Column(Integer, ForeignKey("assignments.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     transcript = Column(Text)
+    audio_filename = Column(String(255), nullable=True)
     azure_result = Column(JSONB)
     openai_result = Column(JSONB)
-    scores = Column(JSONB)
+    scores = Column(JSONB)  # AI scores
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     teacher_feedback = Column(Text, nullable=True)
+    teacher_scores = Column(JSONB, nullable=True)  # Teacher's manual scores
     feedback_at = Column(DateTime(timezone=True), nullable=True)
 
     assignment = relationship("Assignment", back_populates="results")

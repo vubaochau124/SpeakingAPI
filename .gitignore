@@ -54,6 +54,7 @@ results/
 !package-lock.json
 !tsconfig.json
 !database/
+audio_submissions/
 
 # IDE
 .vscode/

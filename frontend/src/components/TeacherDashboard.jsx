@@ -1,25 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
+import FeedbackDetails from './FeedbackDetails';
 
 function TeacherDashboard() {
   const { user, logout, getAuthHeaders } = useAuth();
-  const [activeTab, setActiveTab] = useState('students');
   const [students, setStudents] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
-  const [conversations, setConversations] = useState([]);
-  const [questions, setQuestions] = useState([]);
   const [classes, setClasses] = useState([]);
-  const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [studentDetails, setStudentDetails] = useState(null);
   const [selectedClass, setSelectedClass] = useState(null);
   const [classAssignments, setClassAssignments] = useState([]);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [assignmentSubmissions, setAssignmentSubmissions] = useState(null);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [feedbackText, setFeedbackText] = useState('');
+  const [teacherScores, setTeacherScores] = useState({
+    pronunciation: '',
+    pronunciation_comment: '',
+    fluency: '',
+    fluency_comment: '',
+    grammar: '',
+    grammar_comment: '',
+    vocabulary: '',
+    vocabulary_comment: '',
+    coherence: '',
+    coherence_comment: '',
+    overall: '',
+    suggestions: ''
+  });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -29,6 +38,7 @@ function TeacherDashboard() {
 
   // Assignment form state
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState(null);
   const [assignmentForm, setAssignmentForm] = useState({
     class_id: '',
     topic: '',
@@ -48,38 +58,35 @@ function TeacherDashboard() {
     fetchData();
   }, []);
 
+  // Auto-dismiss notifications after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [studentsRes, conversationsRes, questionsRes, classesRes, assignmentsRes] = await Promise.all([
+      const [studentsRes, classesRes] = await Promise.all([
         axios.get('/api/teacher/students', { headers: getAuthHeaders() }),
-        axios.get('/api/conversations'),
-        axios.get('/api/questions'),
-        axios.get('/api/classes', { headers: getAuthHeaders() }),
-        axios.get('/api/assignments', { headers: getAuthHeaders() })
+        axios.get('/api/classes', { headers: getAuthHeaders() })
       ]);
       setStudents(studentsRes.data.students || []);
       setAllStudents(studentsRes.data.students || []);
-      setConversations(conversationsRes.data.conversations || []);
-      setQuestions(questionsRes.data.questions || []);
       setClasses(classesRes.data.classes || []);
-      setAssignments(assignmentsRes.data.assignments || []);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const viewStudentDetails = async (studentId) => {
-    try {
-      const res = await axios.get(`/api/teacher/students/${studentId}/results`, {
-        headers: getAuthHeaders()
-      });
-      setStudentDetails(res.data);
-      setSelectedStudent(studentId);
-    } catch (err) {
-      console.error('Failed to load student details:', err);
     }
   };
 
@@ -106,21 +113,62 @@ function TeacherDashboard() {
   };
 
   const handleSubmitFeedback = async (assignmentId, submissionId) => {
-    if (!feedbackText.trim()) {
-      setError('Please enter feedback text');
+    // Build teacher scores object (only include non-empty values)
+    const scores = {};
+    if (teacherScores.pronunciation) scores.pronunciation = parseFloat(teacherScores.pronunciation);
+    if (teacherScores.pronunciation_comment) scores.pronunciation_comment = teacherScores.pronunciation_comment;
+    if (teacherScores.fluency) scores.fluency = parseFloat(teacherScores.fluency);
+    if (teacherScores.fluency_comment) scores.fluency_comment = teacherScores.fluency_comment;
+    if (teacherScores.grammar) scores.grammar = parseFloat(teacherScores.grammar);
+    if (teacherScores.grammar_comment) scores.grammar_comment = teacherScores.grammar_comment;
+    if (teacherScores.vocabulary) scores.vocabulary = parseFloat(teacherScores.vocabulary);
+    if (teacherScores.vocabulary_comment) scores.vocabulary_comment = teacherScores.vocabulary_comment;
+    if (teacherScores.coherence) scores.coherence = parseFloat(teacherScores.coherence);
+    if (teacherScores.coherence_comment) scores.coherence_comment = teacherScores.coherence_comment;
+    if (teacherScores.overall) scores.overall = parseFloat(teacherScores.overall);
+    if (teacherScores.suggestions) scores.suggestions = teacherScores.suggestions;
+
+    const hasScores = Object.keys(scores).length > 0;
+    const hasFeedback = feedbackText.trim().length > 0;
+
+    if (!hasFeedback && !hasScores) {
+      setError('Please enter feedback text or scores');
       return;
     }
+
     try {
-      await axios.post(`/api/assignments/${assignmentId}/submissions/${submissionId}/feedback`, {
-        feedback: feedbackText
-      }, { headers: getAuthHeaders() });
+      const payload = {};
+      if (hasFeedback) payload.feedback = feedbackText;
+      if (hasScores) payload.teacher_scores = scores;
+
+      await axios.post(`/api/assignments/${assignmentId}/submissions/${submissionId}/feedback`, payload, { headers: getAuthHeaders() });
       setSuccess('Feedback submitted successfully');
       setFeedbackText('');
+      setTeacherScores({
+        pronunciation: '', pronunciation_comment: '',
+        fluency: '', fluency_comment: '',
+        grammar: '', grammar_comment: '',
+        vocabulary: '', vocabulary_comment: '',
+        coherence: '', coherence_comment: '',
+        overall: '', suggestions: ''
+      });
       setSelectedSubmission(null);
       fetchAssignmentSubmissions(assignmentId);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to submit feedback');
     }
+  };
+
+  const resetTeacherForm = () => {
+    setFeedbackText('');
+    setTeacherScores({
+      pronunciation: '', pronunciation_comment: '',
+      fluency: '', fluency_comment: '',
+      grammar: '', grammar_comment: '',
+      vocabulary: '', vocabulary_comment: '',
+      coherence: '', coherence_comment: '',
+      overall: '', suggestions: ''
+    });
   };
 
   const handleCreateClass = async (e) => {
@@ -137,31 +185,6 @@ function TeacherDashboard() {
       fetchData();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to create class');
-    }
-  };
-
-  const handleCreateAssignment = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      await axios.post('/api/assignments', assignmentForm, { headers: getAuthHeaders() });
-      setSuccess('Assignment created successfully');
-      setShowAssignmentForm(false);
-      setAssignmentForm({ class_id: '', topic: '', question_text: '', requirements: '', instructions: '' });
-      fetchData();
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create assignment');
-    }
-  };
-
-  const handleDeleteAssignment = async (assignmentId) => {
-    if (!confirm('Are you sure you want to delete this assignment?')) return;
-    try {
-      await axios.delete(`/api/assignments/${assignmentId}`, { headers: getAuthHeaders() });
-      setSuccess('Assignment deleted');
-      fetchData();
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to delete assignment');
     }
   };
 
@@ -226,7 +249,7 @@ function TeacherDashboard() {
           <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-rose-400 bg-clip-text text-transparent mb-3">
             Teacher Dashboard
           </h1>
-          <p className="text-slate-400 text-lg">Manage classes, assignments, and view student results</p>
+          <p className="text-slate-400 text-lg">Manage your classes and students</p>
         </div>
 
         {/* Messages */}
@@ -243,50 +266,6 @@ function TeacherDashboard() {
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="flex mb-8 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-2 shadow-xl overflow-x-auto">
-          <button
-            onClick={() => { setActiveTab('students'); setSelectedStudent(null); }}
-            className={`flex-1 py-4 px-4 rounded-xl font-semibold transition-all duration-300 whitespace-nowrap ${
-              activeTab === 'students'
-                ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            Students
-          </button>
-          <button
-            onClick={() => { setActiveTab('classes'); setSelectedClass(null); }}
-            className={`flex-1 py-4 px-4 rounded-xl font-semibold transition-all duration-300 whitespace-nowrap ${
-              activeTab === 'classes'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            Classes
-          </button>
-          <button
-            onClick={() => setActiveTab('assignments')}
-            className={`flex-1 py-4 px-4 rounded-xl font-semibold transition-all duration-300 whitespace-nowrap ${
-              activeTab === 'assignments'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            Assignments
-          </button>
-          <button
-            onClick={() => setActiveTab('content')}
-            className={`flex-1 py-4 px-4 rounded-xl font-semibold transition-all duration-300 whitespace-nowrap ${
-              activeTab === 'content'
-                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            Content
-          </button>
-        </div>
-
         {loading ? (
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
@@ -294,117 +273,8 @@ function TeacherDashboard() {
           </div>
         ) : (
           <>
-            {/* Students Tab */}
-            {activeTab === 'students' && !selectedStudent && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                <h2 className="text-2xl font-bold text-white mb-6">Student Results ({students.length})</h2>
-                {students.length === 0 ? (
-                  <p className="text-slate-400 text-center py-8">No students registered yet</p>
-                ) : (
-                  <div className="space-y-4">
-                    {students.map(student => (
-                      <div
-                        key={student.id}
-                        className="bg-slate-700/30 rounded-xl p-4 border border-slate-600 hover:border-purple-500/50 transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold text-white">{student.username}</h3>
-                            <p className="text-slate-400 text-sm">{student.email}</p>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-center">
-                              <p className="text-xs text-slate-400">Part 1</p>
-                              {student.results.conversation ? (
-                                <p className={`font-bold ${getScoreColor(student.results.conversation.scores?.azure_accuracy)}`}>
-                                  {student.results.conversation.scores?.azure_accuracy?.toFixed(0) || '-'}%
-                                </p>
-                              ) : (
-                                <p className="text-slate-500">-</p>
-                              )}
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-slate-400">Part 2</p>
-                              {student.results.unscripted ? (
-                                <p className={`font-bold ${getScoreColor(student.results.unscripted.scores?.azure?.total_score)}`}>
-                                  {student.results.unscripted.scores?.azure?.total_score?.toFixed(0) || '-'}%
-                                </p>
-                              ) : (
-                                <p className="text-slate-500">-</p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => viewStudentDetails(student.id)}
-                              className="px-4 py-2 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors"
-                            >
-                              View Details
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Student Details View */}
-            {activeTab === 'students' && selectedStudent && studentDetails && (
-              <div className="space-y-6">
-                <button
-                  onClick={() => { setSelectedStudent(null); setStudentDetails(null); }}
-                  className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back to Students
-                </button>
-
-                <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                  <h2 className="text-2xl font-bold text-white mb-2">{studentDetails.student.username}</h2>
-                  <p className="text-slate-400 mb-6">{studentDetails.student.email}</p>
-
-                  {studentDetails.results.length === 0 ? (
-                    <p className="text-slate-400">No results yet</p>
-                  ) : (
-                    <div className="space-y-6">
-                      {studentDetails.results.map((result, idx) => (
-                        <div key={idx} className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
-                          <h3 className="text-lg font-semibold text-white mb-3">
-                            {result.part_type === 'conversation' ? 'Part 1: Conversation' : 'Part 2: Answer Question'}
-                          </h3>
-                          <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm text-slate-400 mb-1">Transcript</p>
-                              <p className="text-slate-300 text-sm bg-slate-800/50 rounded-lg p-3 max-h-32 overflow-y-auto">
-                                {result.transcript || 'No transcript'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-slate-400 mb-1">Scores</p>
-                              <div className="bg-slate-800/50 rounded-lg p-3">
-                                {result.scores && (
-                                  <pre className="text-xs text-slate-300 overflow-x-auto">
-                                    {JSON.stringify(result.scores, null, 2)}
-                                  </pre>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <p className="text-xs text-slate-500 mt-3">
-                            Last updated: {result.updated_at ? new Date(result.updated_at).toLocaleString() : 'Unknown'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Classes Tab */}
-            {activeTab === 'classes' && !selectedClass && (
+            {/* Classes List */}
+            {!selectedClass && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h2 className="text-2xl font-bold text-white">My Classes ({classes.length})</h2>
@@ -474,7 +344,7 @@ function TeacherDashboard() {
             )}
 
             {/* Class Detail View */}
-            {activeTab === 'classes' && selectedClass && !selectedAssignment && (
+            {selectedClass && !selectedAssignment && (
               <div className="space-y-6">
                 <button
                   onClick={() => { setSelectedClass(null); setClassAssignments([]); setClassViewMode('assignments'); }}
@@ -537,18 +407,25 @@ function TeacherDashboard() {
                       {/* Assignment Form */}
                       {showAssignmentForm && (
                         <div className="bg-slate-700/30 rounded-xl p-4 mb-4 border border-slate-600">
-                          <h4 className="text-md font-bold text-white mb-3">New Assignment</h4>
+                          <h4 className="text-md font-bold text-white mb-3">
+                            {editingAssignment ? 'Edit Assignment' : 'New Assignment'}
+                          </h4>
                           <form onSubmit={async (e) => {
                             e.preventDefault();
                             try {
-                              await axios.post('/api/assignments', assignmentForm, { headers: getAuthHeaders() });
-                              setSuccess('Assignment created');
+                              if (editingAssignment) {
+                                await axios.put(`/api/assignments/${editingAssignment.id}`, assignmentForm, { headers: getAuthHeaders() });
+                                setSuccess('Assignment updated');
+                              } else {
+                                await axios.post('/api/assignments', assignmentForm, { headers: getAuthHeaders() });
+                                setSuccess('Assignment created');
+                              }
                               setShowAssignmentForm(false);
+                              setEditingAssignment(null);
                               setAssignmentForm({ class_id: '', topic: '', question_text: '', requirements: '', instructions: '' });
                               fetchClassDetails(selectedClass.id);
-                              fetchData();
                             } catch (err) {
-                              setError(err.response?.data?.detail || 'Failed to create assignment');
+                              setError(err.response?.data?.detail || 'Failed to save assignment');
                             }
                           }} className="space-y-3">
                             <input
@@ -575,8 +452,14 @@ function TeacherDashboard() {
                               className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white text-sm"
                             />
                             <div className="flex gap-2">
-                              <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm">Create</button>
-                              <button type="button" onClick={() => setShowAssignmentForm(false)} className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm">Cancel</button>
+                              <button type="submit" className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm">
+                                {editingAssignment ? 'Update' : 'Create'}
+                              </button>
+                              <button type="button" onClick={() => {
+                                setShowAssignmentForm(false);
+                                setEditingAssignment(null);
+                                setAssignmentForm({ class_id: '', topic: '', question_text: '', requirements: '', instructions: '' });
+                              }} className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm">Cancel</button>
                             </div>
                           </form>
                         </div>
@@ -601,12 +484,53 @@ function TeacherDashboard() {
                                     <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-xs rounded">{a.topic}</span>
                                   </div>
                                   <p className="text-white font-medium">{a.question_text}</p>
+                                  {a.requirements && (
+                                    <p className="text-slate-400 text-sm mt-1">{a.requirements}</p>
+                                  )}
                                 </div>
-                                <div className="text-right ml-4">
-                                  <p className="text-xs text-slate-400">Submissions</p>
-                                  <p className="text-lg font-bold text-white">
-                                    {classAssignments.find(ca => ca.id === a.id)?.submissions_count || 0}/{selectedClass.students?.length || 0}
-                                  </p>
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <p className="text-xs text-slate-400">Submissions</p>
+                                    <p className="text-lg font-bold text-white">
+                                      {a.submissions_count || 0}/{selectedClass.students?.length || 0}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingAssignment(a);
+                                        setAssignmentForm({
+                                          class_id: a.class_id,
+                                          topic: a.topic,
+                                          question_text: a.question_text,
+                                          requirements: a.requirements || '',
+                                          instructions: a.instructions || ''
+                                        });
+                                        setShowAssignmentForm(true);
+                                      }}
+                                      className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (confirm('Delete this assignment? This will also delete all submissions.')) {
+                                          try {
+                                            await axios.delete(`/api/assignments/${a.id}`, { headers: getAuthHeaders() });
+                                            setSuccess('Assignment deleted');
+                                            fetchClassDetails(selectedClass.id);
+                                          } catch (err) {
+                                            setError(err.response?.data?.detail || 'Failed to delete assignment');
+                                          }
+                                        }
+                                      }}
+                                      className="px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs hover:bg-red-500/30"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -688,7 +612,7 @@ function TeacherDashboard() {
             )}
 
             {/* Assignment Detail View with Submissions */}
-            {activeTab === 'classes' && selectedClass && selectedAssignment && (
+            {selectedClass && selectedAssignment && (
               <div className="space-y-6">
                 <button
                   onClick={() => { setSelectedAssignment(null); setAssignmentSubmissions(null); setSelectedSubmission(null); }}
@@ -760,18 +684,19 @@ function TeacherDashboard() {
                             <div className="text-right">
                               {sub.status === 'submitted' ? (
                                 <>
-                                  <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded">Submitted</span>
-                                  {sub.scores?.azure?.total_score && (
+                                  {sub.review_status === 'reviewed' ? (
+                                    <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded">Reviewed</span>
+                                  ) : (
+                                    <span className="px-2 py-1 bg-amber-500/20 text-amber-300 text-xs rounded">Waiting for Teacher</span>
+                                  )}
+                                  {sub.scores?.azure?.total_score !== undefined && (
                                     <p className={`text-lg font-bold mt-1 ${getScoreColor(sub.scores.azure.total_score)}`}>
                                       {sub.scores.azure.total_score.toFixed(0)}%
                                     </p>
                                   )}
-                                  {sub.teacher_feedback && (
-                                    <span className="text-xs text-cyan-400 block mt-1">Feedback given</span>
-                                  )}
                                 </>
                               ) : (
-                                <span className="px-2 py-1 bg-amber-500/20 text-amber-300 text-xs rounded">Pending</span>
+                                <span className="px-2 py-1 bg-slate-500/20 text-slate-400 text-xs rounded">Not Submitted</span>
                               )}
                             </div>
                           </div>
@@ -786,14 +711,25 @@ function TeacherDashboard() {
                 {/* Submission Detail Modal */}
                 {selectedSubmission && (
                   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="bg-slate-800 rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                      {/* Header with Status */}
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <h3 className="text-xl font-bold text-white">{selectedSubmission.student_name}'s Submission</h3>
                           <p className="text-slate-400 text-sm">{selectedSubmission.student_email}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            {selectedSubmission.review_status === 'reviewed' ? (
+                              <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded">Reviewed</span>
+                            ) : (
+                              <span className="px-2 py-1 bg-amber-500/20 text-amber-300 text-xs rounded">Waiting for Teacher</span>
+                            )}
+                            <span className="text-xs text-slate-500">
+                              Submitted: {selectedSubmission.submitted_at ? new Date(selectedSubmission.submitted_at).toLocaleString() : 'Unknown'}
+                            </span>
+                          </div>
                         </div>
                         <button
-                          onClick={() => { setSelectedSubmission(null); setFeedbackText(''); }}
+                          onClick={() => { setSelectedSubmission(null); resetTeacherForm(); }}
                           className="text-slate-400 hover:text-white"
                         >
                           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -802,36 +738,13 @@ function TeacherDashboard() {
                         </button>
                       </div>
 
-                      {/* Scores */}
-                      {selectedSubmission.scores && (
+                      {/* Audio Player */}
+                      {selectedSubmission.audio_url && (
                         <div className="bg-slate-700/30 rounded-lg p-4 mb-4">
-                          <h4 className="text-sm font-semibold text-slate-300 mb-3">Scores</h4>
-                          <div className="grid grid-cols-3 gap-3">
-                            {selectedSubmission.scores.azure && (
-                              <div className="text-center">
-                                <p className="text-xs text-slate-400">Azure</p>
-                                <p className={`text-xl font-bold ${getScoreColor(selectedSubmission.scores.azure.total_score)}`}>
-                                  {selectedSubmission.scores.azure.total_score?.toFixed(0) || '-'}%
-                                </p>
-                              </div>
-                            )}
-                            {selectedSubmission.scores.openai && (
-                              <div className="text-center">
-                                <p className="text-xs text-slate-400">AI</p>
-                                <p className={`text-xl font-bold ${getScoreColor(selectedSubmission.scores.openai.total_score)}`}>
-                                  {selectedSubmission.scores.openai.total_score?.toFixed(0) || '-'}%
-                                </p>
-                              </div>
-                            )}
-                            {selectedSubmission.scores.combined && (
-                              <div className="text-center">
-                                <p className="text-xs text-slate-400">Combined</p>
-                                <p className={`text-xl font-bold ${getScoreColor(selectedSubmission.scores.combined.combined_score)}`}>
-                                  {selectedSubmission.scores.combined.combined_score?.toFixed(0) || '-'}%
-                                </p>
-                              </div>
-                            )}
-                          </div>
+                          <h4 className="text-sm font-semibold text-slate-300 mb-2">Recording</h4>
+                          <audio controls className="w-full" src={selectedSubmission.audio_url}>
+                            Your browser does not support the audio element.
+                          </audio>
                         </div>
                       )}
 
@@ -841,43 +754,344 @@ function TeacherDashboard() {
                         <p className="text-white leading-relaxed">{selectedSubmission.transcript || 'No transcript available'}</p>
                       </div>
 
-                      {/* Submitted At */}
-                      <p className="text-xs text-slate-500 mb-4">
-                        Submitted: {selectedSubmission.submitted_at ? new Date(selectedSubmission.submitted_at).toLocaleString() : 'Unknown'}
-                      </p>
+                      {/* AI Scores Summary */}
+                      {selectedSubmission.scores?.azure && (
+                        <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
+                          <h4 className="text-lg font-semibold text-blue-300 mb-4">AI Scores Summary</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                              <p className="text-xs text-slate-400">Overall</p>
+                              <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.total_score)}`}>
+                                {selectedSubmission.scores.azure.total_score?.toFixed(0) || '-'}%
+                              </p>
+                            </div>
+                            {selectedSubmission.scores.azure.pronunciation_score !== undefined && (
+                              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                                <p className="text-xs text-slate-400">Pronunciation</p>
+                                <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.pronunciation_score)}`}>
+                                  {selectedSubmission.scores.azure.pronunciation_score?.toFixed(0) || '-'}%
+                                </p>
+                              </div>
+                            )}
+                            {selectedSubmission.scores.azure.fluency_score !== undefined && (
+                              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                                <p className="text-xs text-slate-400">Fluency</p>
+                                <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.fluency_score)}`}>
+                                  {selectedSubmission.scores.azure.fluency_score?.toFixed(0) || '-'}%
+                                </p>
+                              </div>
+                            )}
+                            {selectedSubmission.scores.azure.completeness_score !== undefined && (
+                              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                                <p className="text-xs text-slate-400">Completeness</p>
+                                <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.completeness_score)}`}>
+                                  {selectedSubmission.scores.azure.completeness_score?.toFixed(0) || '-'}%
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
-                      {/* Existing Feedback */}
-                      {selectedSubmission.teacher_feedback && (
+                      {/* Detailed AI Feedback */}
+                      {(selectedSubmission.openai_result || selectedSubmission.azure_result?.speech_score) && (
+                        <div className="mb-4">
+                          <FeedbackDetails
+                            grammar={selectedSubmission.openai_result?.grammar}
+                            vocab={selectedSubmission.openai_result?.vocab}
+                            coherence={selectedSubmission.openai_result?.coherence}
+                            fluency={selectedSubmission.azure_result?.speech_score?.fluency}
+                            wordList={selectedSubmission.azure_result?.speech_score?.words}
+                          />
+                        </div>
+                      )}
+
+                      {/* Existing Teacher Feedback & Scores */}
+                      {(selectedSubmission.teacher_feedback || selectedSubmission.teacher_scores) && (
                         <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4 mb-4">
-                          <h4 className="text-sm font-semibold text-cyan-300 mb-2">Your Feedback</h4>
-                          <p className="text-white">{selectedSubmission.teacher_feedback}</p>
+                          <h4 className="text-lg font-semibold text-cyan-300 mb-3">Teacher's Evaluation</h4>
+
+                          {selectedSubmission.teacher_scores && (
+                            <div className="space-y-2 mb-3">
+                              {/* Scores Grid */}
+                              <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                                {selectedSubmission.teacher_scores.pronunciation !== undefined && (
+                                  <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-slate-400">Pronunciation</p>
+                                    <p className={`text-lg font-bold ${getScoreColor(selectedSubmission.teacher_scores.pronunciation)}`}>
+                                      {selectedSubmission.teacher_scores.pronunciation}
+                                    </p>
+                                  </div>
+                                )}
+                                {selectedSubmission.teacher_scores.fluency !== undefined && (
+                                  <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-slate-400">Fluency</p>
+                                    <p className={`text-lg font-bold ${getScoreColor(selectedSubmission.teacher_scores.fluency)}`}>
+                                      {selectedSubmission.teacher_scores.fluency}
+                                    </p>
+                                  </div>
+                                )}
+                                {selectedSubmission.teacher_scores.grammar !== undefined && (
+                                  <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-slate-400">Grammar</p>
+                                    <p className={`text-lg font-bold ${getScoreColor(selectedSubmission.teacher_scores.grammar)}`}>
+                                      {selectedSubmission.teacher_scores.grammar}
+                                    </p>
+                                  </div>
+                                )}
+                                {selectedSubmission.teacher_scores.vocabulary !== undefined && (
+                                  <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-slate-400">Vocabulary</p>
+                                    <p className={`text-lg font-bold ${getScoreColor(selectedSubmission.teacher_scores.vocabulary)}`}>
+                                      {selectedSubmission.teacher_scores.vocabulary}
+                                    </p>
+                                  </div>
+                                )}
+                                {selectedSubmission.teacher_scores.coherence !== undefined && (
+                                  <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-slate-400">Coherence</p>
+                                    <p className={`text-lg font-bold ${getScoreColor(selectedSubmission.teacher_scores.coherence)}`}>
+                                      {selectedSubmission.teacher_scores.coherence}
+                                    </p>
+                                  </div>
+                                )}
+                                {selectedSubmission.teacher_scores.overall !== undefined && (
+                                  <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                    <p className="text-xs text-slate-400">Overall</p>
+                                    <p className={`text-lg font-bold ${getScoreColor(selectedSubmission.teacher_scores.overall)}`}>
+                                      {selectedSubmission.teacher_scores.overall}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Per-category Comments */}
+                              {(selectedSubmission.teacher_scores.pronunciation_comment ||
+                                selectedSubmission.teacher_scores.fluency_comment ||
+                                selectedSubmission.teacher_scores.grammar_comment ||
+                                selectedSubmission.teacher_scores.vocabulary_comment ||
+                                selectedSubmission.teacher_scores.coherence_comment) && (
+                                <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+                                  <p className="text-xs text-amber-400 mb-2">Category Comments:</p>
+                                  {selectedSubmission.teacher_scores.pronunciation_comment && (
+                                    <p className="text-sm text-slate-300"><span className="text-purple-400">Pronunciation:</span> {selectedSubmission.teacher_scores.pronunciation_comment}</p>
+                                  )}
+                                  {selectedSubmission.teacher_scores.fluency_comment && (
+                                    <p className="text-sm text-slate-300"><span className="text-cyan-400">Fluency:</span> {selectedSubmission.teacher_scores.fluency_comment}</p>
+                                  )}
+                                  {selectedSubmission.teacher_scores.grammar_comment && (
+                                    <p className="text-sm text-slate-300"><span className="text-pink-400">Grammar:</span> {selectedSubmission.teacher_scores.grammar_comment}</p>
+                                  )}
+                                  {selectedSubmission.teacher_scores.vocabulary_comment && (
+                                    <p className="text-sm text-slate-300"><span className="text-violet-400">Vocabulary:</span> {selectedSubmission.teacher_scores.vocabulary_comment}</p>
+                                  )}
+                                  {selectedSubmission.teacher_scores.coherence_comment && (
+                                    <p className="text-sm text-slate-300"><span className="text-blue-400">Coherence:</span> {selectedSubmission.teacher_scores.coherence_comment}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {selectedSubmission.teacher_scores?.suggestions && (
+                            <div className="bg-slate-800/50 rounded-lg p-3 mb-3">
+                              <p className="text-xs text-emerald-400 mb-1">Teacher's Suggestions:</p>
+                              <p className="text-sm text-slate-300">{selectedSubmission.teacher_scores.suggestions}</p>
+                            </div>
+                          )}
+
+                          {selectedSubmission.teacher_feedback && (
+                            <div className="bg-slate-800/50 rounded-lg p-3">
+                              <p className="text-xs text-cyan-400 mb-1">Teacher's Feedback:</p>
+                              <p className="text-sm text-slate-300">{selectedSubmission.teacher_feedback}</p>
+                            </div>
+                          )}
+
                           <p className="text-xs text-slate-500 mt-2">
-                            Given: {selectedSubmission.feedback_at ? new Date(selectedSubmission.feedback_at).toLocaleString() : ''}
+                            Reviewed: {selectedSubmission.feedback_at ? new Date(selectedSubmission.feedback_at).toLocaleString() : ''}
                           </p>
                         </div>
                       )}
 
-                      {/* Feedback Form */}
+                      {/* Teacher Scoring & Feedback Form */}
                       <div className="border-t border-slate-700 pt-4">
-                        <h4 className="text-sm font-semibold text-slate-300 mb-2">
-                          {selectedSubmission.teacher_feedback ? 'Update Feedback' : 'Add Feedback'}
+                        <h4 className="text-lg font-semibold text-slate-300 mb-4">
+                          {selectedSubmission.teacher_feedback || selectedSubmission.teacher_scores ? 'Update Evaluation' : 'Add Your Evaluation'}
                         </h4>
-                        <textarea
-                          value={feedbackText || selectedSubmission.teacher_feedback || ''}
-                          onChange={(e) => setFeedbackText(e.target.value)}
-                          className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white resize-none"
-                          rows="4"
-                          placeholder="Write your feedback for this student..."
-                        />
-                        <div className="flex gap-2 mt-3">
+
+                        {/* Score Inputs with Comments */}
+                        <div className="space-y-4 mb-4">
+                          {/* Pronunciation */}
+                          <div className="bg-slate-700/20 rounded-lg p-3">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-lg">🎯</span>
+                              <label className="text-sm font-medium text-purple-300">Pronunciation</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={teacherScores.pronunciation}
+                                onChange={(e) => setTeacherScores({ ...teacherScores, pronunciation: e.target.value })}
+                                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm text-center"
+                                placeholder="0-100"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={teacherScores.pronunciation_comment}
+                              onChange={(e) => setTeacherScores({ ...teacherScores, pronunciation_comment: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded text-white text-sm"
+                              placeholder="Comment on pronunciation (optional)"
+                            />
+                          </div>
+
+                          {/* Fluency */}
+                          <div className="bg-slate-700/20 rounded-lg p-3">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-lg">🗣️</span>
+                              <label className="text-sm font-medium text-cyan-300">Fluency</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={teacherScores.fluency}
+                                onChange={(e) => setTeacherScores({ ...teacherScores, fluency: e.target.value })}
+                                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm text-center"
+                                placeholder="0-100"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={teacherScores.fluency_comment}
+                              onChange={(e) => setTeacherScores({ ...teacherScores, fluency_comment: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded text-white text-sm"
+                              placeholder="Comment on fluency (optional)"
+                            />
+                          </div>
+
+                          {/* Grammar */}
+                          <div className="bg-slate-700/20 rounded-lg p-3">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-lg">📝</span>
+                              <label className="text-sm font-medium text-pink-300">Grammar</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={teacherScores.grammar}
+                                onChange={(e) => setTeacherScores({ ...teacherScores, grammar: e.target.value })}
+                                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm text-center"
+                                placeholder="0-100"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={teacherScores.grammar_comment}
+                              onChange={(e) => setTeacherScores({ ...teacherScores, grammar_comment: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded text-white text-sm"
+                              placeholder="Comment on grammar (optional)"
+                            />
+                          </div>
+
+                          {/* Vocabulary */}
+                          <div className="bg-slate-700/20 rounded-lg p-3">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-lg">📚</span>
+                              <label className="text-sm font-medium text-violet-300">Vocabulary</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={teacherScores.vocabulary}
+                                onChange={(e) => setTeacherScores({ ...teacherScores, vocabulary: e.target.value })}
+                                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm text-center"
+                                placeholder="0-100"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={teacherScores.vocabulary_comment}
+                              onChange={(e) => setTeacherScores({ ...teacherScores, vocabulary_comment: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded text-white text-sm"
+                              placeholder="Comment on vocabulary (optional)"
+                            />
+                          </div>
+
+                          {/* Coherence */}
+                          <div className="bg-slate-700/20 rounded-lg p-3">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-lg">🔗</span>
+                              <label className="text-sm font-medium text-blue-300">Coherence</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={teacherScores.coherence}
+                                onChange={(e) => setTeacherScores({ ...teacherScores, coherence: e.target.value })}
+                                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm text-center"
+                                placeholder="0-100"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={teacherScores.coherence_comment}
+                              onChange={(e) => setTeacherScores({ ...teacherScores, coherence_comment: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded text-white text-sm"
+                              placeholder="Comment on coherence (optional)"
+                            />
+                          </div>
+
+                          {/* Overall */}
+                          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">⭐</span>
+                              <label className="text-sm font-medium text-emerald-300">Overall Score</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={teacherScores.overall}
+                                onChange={(e) => setTeacherScores({ ...teacherScores, overall: e.target.value })}
+                                className="w-20 px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm text-center"
+                                placeholder="0-100"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Suggestions */}
+                        <div className="mb-4">
+                          <label className="block text-xs text-slate-400 mb-1">Your Suggestions for Improvement</label>
+                          <textarea
+                            value={teacherScores.suggestions}
+                            onChange={(e) => setTeacherScores({ ...teacherScores, suggestions: e.target.value })}
+                            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white resize-none text-sm"
+                            rows="2"
+                            placeholder="Specific suggestions to help the student improve..."
+                          />
+                        </div>
+
+                        {/* General Feedback */}
+                        <div className="mb-4">
+                          <label className="block text-xs text-slate-400 mb-1">General Feedback</label>
+                          <textarea
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white resize-none text-sm"
+                            rows="3"
+                            placeholder="Overall feedback for the student..."
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
                           <button
                             onClick={() => handleSubmitFeedback(selectedAssignment.id, selectedSubmission.id)}
                             className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg hover:opacity-90"
                           >
-                            {selectedSubmission.teacher_feedback ? 'Update Feedback' : 'Submit Feedback'}
+                            {selectedSubmission.teacher_feedback || selectedSubmission.teacher_scores ? 'Update Evaluation' : 'Submit Evaluation'}
                           </button>
                           <button
-                            onClick={() => { setSelectedSubmission(null); setFeedbackText(''); }}
+                            onClick={() => { setSelectedSubmission(null); resetTeacherForm(); }}
                             className="px-4 py-2 bg-slate-600 text-white rounded-lg"
                           >
                             Close
@@ -890,152 +1104,6 @@ function TeacherDashboard() {
               </div>
             )}
 
-            {/* Assignments Tab */}
-            {activeTab === 'assignments' && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold text-white">Assignments ({assignments.length})</h2>
-                  <button
-                    onClick={() => setShowAssignmentForm(true)}
-                    className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:opacity-90"
-                  >
-                    + New Assignment
-                  </button>
-                </div>
-
-                {showAssignmentForm && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50">
-                    <h3 className="text-lg font-bold text-white mb-4">Create New Assignment</h3>
-                    <form onSubmit={handleCreateAssignment} className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Class</label>
-                        <select
-                          value={assignmentForm.class_id}
-                          onChange={(e) => setAssignmentForm({ ...assignmentForm, class_id: e.target.value })}
-                          required
-                          className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
-                        >
-                          <option value="">Select a class</option>
-                          {classes.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Topic</label>
-                        <input
-                          type="text"
-                          value={assignmentForm.topic}
-                          onChange={(e) => setAssignmentForm({ ...assignmentForm, topic: e.target.value })}
-                          required
-                          className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
-                          placeholder="e.g., Travel, Education, Technology"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Question</label>
-                        <textarea
-                          value={assignmentForm.question_text}
-                          onChange={(e) => setAssignmentForm({ ...assignmentForm, question_text: e.target.value })}
-                          required
-                          className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
-                          rows="2"
-                          placeholder="Enter the speaking question..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Requirements (optional)</label>
-                        <input
-                          type="text"
-                          value={assignmentForm.requirements}
-                          onChange={(e) => setAssignmentForm({ ...assignmentForm, requirements: e.target.value })}
-                          className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
-                          placeholder="e.g., Speak for at least 1 minute"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Instructions (optional)</label>
-                        <textarea
-                          value={assignmentForm.instructions}
-                          onChange={(e) => setAssignmentForm({ ...assignmentForm, instructions: e.target.value })}
-                          className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
-                          rows="2"
-                          placeholder="Additional instructions for students..."
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="submit" className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg">
-                          Create
-                        </button>
-                        <button type="button" onClick={() => setShowAssignmentForm(false)} className="px-4 py-2 bg-slate-600 text-white rounded-lg">
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                <div className="grid gap-4">
-                  {assignments.map((a) => (
-                    <div key={a.id} className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded">
-                              {a.topic}
-                            </span>
-                            <span className="text-slate-500 text-sm">
-                              {a.class_name}
-                            </span>
-                          </div>
-                          <p className="text-white">{a.question_text}</p>
-                          {a.requirements && (
-                            <p className="text-slate-400 text-sm mt-1">Requirements: {a.requirements}</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleDeleteAssignment(a.id)}
-                          className="px-3 py-1 bg-red-500/20 text-red-300 rounded hover:bg-red-500/30"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Content Tab (View Only) */}
-            {activeTab === 'content' && (
-              <div className="space-y-6">
-                <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                  <h2 className="text-xl font-bold text-white mb-4">Conversations ({conversations.length})</h2>
-                  <p className="text-slate-400 text-sm mb-4">Conversations are managed by admins</p>
-                  <div className="space-y-2">
-                    {conversations.map(conv => (
-                      <div key={conv.id} className="bg-slate-700/30 rounded-lg p-3 border border-slate-600">
-                        <h3 className="text-white">{conv.topic}</h3>
-                        <p className="text-slate-400 text-sm">{Object.keys(conv.dialogue || {}).length} lines</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                  <h2 className="text-xl font-bold text-white mb-4">Questions ({questions.length})</h2>
-                  <p className="text-slate-400 text-sm mb-4">Questions are managed by admins</p>
-                  <div className="space-y-2">
-                    {questions.map(q => (
-                      <div key={q.id} className="bg-slate-700/30 rounded-lg p-3 border border-slate-600">
-                        <span className="text-xs text-cyan-400">{q.topic}</span>
-                        <p className="text-white text-sm mt-1">{q.question}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>
