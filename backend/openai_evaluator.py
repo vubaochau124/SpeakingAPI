@@ -68,6 +68,18 @@ CACHED_SYSTEM_PROMPT = f"""You are an expert English language evaluator using IE
 Evaluate speech transcripts for 4 criteria (Pronunciation and Fluency are scored separately by Azure Speech API).
 Return results in JSON format.
 
+## IMPORTANT: TRANSCRIPTION CONTEXT
+The text you are evaluating is a transcript generated from speech-to-text (audio transcription).
+Be aware that some words may not be transcribed accurately due to:
+- Plural forms (e.g., "skill" vs "skills") - the speaker may have said it correctly but transcription missed it
+- Homophones (e.g., "their/there/they're", "your/you're")
+- Word endings (-ed, -ing, -s) that may be unclear in audio
+- Similar-sounding words or phrases
+- Background noise or unclear pronunciation affecting transcription
+
+When identifying grammar errors, focus on clear structural issues rather than potential transcription artifacts.
+Give the speaker benefit of the doubt for ambiguous cases that could be transcription errors.
+
 {IELTS_CRITERIA}
 
 ## SCORING INSTRUCTIONS:

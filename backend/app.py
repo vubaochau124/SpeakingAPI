@@ -1861,6 +1861,146 @@ async def evaluate_audio(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# FAST PROGRESSIVE LOADING ENDPOINTS
+# Split evaluation into Azure (fast) + OpenAI (separate call) for better UX
+# ============================================================================
+
+@app.post("/api/evaluate-azure")
+async def evaluate_azure_only(
+    audio: UploadFile = File(...),
+    question: Optional[str] = Form(None),
+    question_id: Optional[int] = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Fast endpoint - Azure pronunciation assessment only. Returns transcript and audio immediately."""
+    import time
+    start_time = time.time()
+
+    # Validate file
+    if not audio.filename:
+        raise HTTPException(status_code=400, detail="No file selected")
+
+    if not allowed_file(audio.filename):
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    # Save uploaded file temporarily
+    filename = audio.filename.replace(" ", "_")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+    try:
+        # Save file
+        with open(filepath, "wb") as buffer:
+            content = await audio.read()
+            buffer.write(content)
+
+        # Initialize Azure Speech API
+        client = AzureSpeechAPI()
+
+        # Prepare audio (convert to WAV if needed)
+        wav_path, needs_cleanup = client.prepare_audio(filepath)
+
+        # Get transcript (Whisper)
+        transcript = client.transcribe_only(wav_path)
+
+        # Run Azure pronunciation assessment
+        print(f"\n[Azure Fast] Running pronunciation assessment...")
+        azure_result = client.assess_pronunciation_only(wav_path, transcript)
+
+        # Clean up temp WAV file
+        if needs_cleanup and os.path.exists(wav_path):
+            try:
+                os.remove(wav_path)
+            except Exception:
+                pass
+
+        # Calculate Azure scores
+        azure_score = calculate_azure_score(azure_result)
+        pronunciation_band = azure_score.get('pronunciation_band', 5.0)
+        fluency_band = azure_score.get('fluency_band', 5.0)
+
+        elapsed = time.time() - start_time
+        print(f"[Azure Fast] Complete in {elapsed:.2f}s - Pronunciation: {pronunciation_band}, Fluency: {fluency_band}")
+
+        # Read audio file and convert to base64
+        with open(filepath, 'rb') as audio_file:
+            audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
+            ext = filename.rsplit('.', 1)[1].lower()
+            mime_types = {
+                'wav': 'audio/wav', 'mp3': 'audio/mpeg', 'm4a': 'audio/mp4',
+                'webm': 'audio/webm', 'ogg': 'audio/ogg', 'aiff': 'audio/aiff'
+            }
+            mime_type = mime_types.get(ext, 'audio/wav')
+            audio_base64 = f"data:{mime_type};base64,{audio_data}"
+
+        # Clean up original file
+        os.remove(filepath)
+
+        # Return Azure results immediately (OpenAI will be called separately)
+        return {
+            'status': 'azure_complete',
+            'transcript': transcript,
+            'question': question,
+            'audio_data': audio_base64,
+            'speech_score': azure_result.get('speech_score', {}),
+            'azure_scores': {
+                'pronunciation_band': pronunciation_band,
+                'fluency_band': fluency_band,
+                'raw_scores': azure_score.get('raw_scores', {})
+            },
+            'processing_time': round(elapsed, 2)
+        }
+
+    except Exception as e:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/evaluate-openai")
+async def evaluate_openai_only(
+    transcript: str = Form(...),
+    question: Optional[str] = Form(None),
+    pronunciation_band: float = Form(5.0),
+    fluency_band: float = Form(5.0),
+    current_user: User = Depends(get_current_user)
+):
+    """Separate OpenAI evaluation endpoint. Call after Azure is complete."""
+    import time
+    start_time = time.time()
+
+    if not transcript or not transcript.strip():
+        raise HTTPException(status_code=400, detail="Transcript is required")
+
+    try:
+        print(f"\n[OpenAI] Running evaluation...")
+        openai_client = OpenAIEvaluator()
+        evaluation = openai_client.enhance_evaluation(
+            transcript=transcript,
+            question=question,
+            azure_pronunciation_band=pronunciation_band,
+            azure_fluency_band=fluency_band
+        )
+
+        openai_result = evaluation.get('openai_result', {})
+        combined_result = evaluation.get('combined_result', {})
+
+        elapsed = time.time() - start_time
+        print(f"[OpenAI] Complete in {elapsed:.2f}s - Overall Band: {combined_result.get('overall_band', 'N/A')}")
+
+        return {
+            'status': 'openai_complete',
+            'openai_result': openai_result,
+            'combined_result': combined_result,
+            'processing_time': round(elapsed, 2)
+        }
+
+    except Exception as e:
+        print(f"[OpenAI] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/evaluate-scripted")
 async def evaluate_scripted(
     audio: UploadFile = File(...),

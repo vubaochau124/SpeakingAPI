@@ -49,6 +49,7 @@ function MainApp() {
   // Unscripted (Part 2) state
   const [unscriptedResults, setUnscriptedResults] = useState(null);
   const [unscriptedLoading, setUnscriptedLoading] = useState(false);
+  const [openaiLoading, setOpenaiLoading] = useState(false);  // Separate loading for OpenAI
   const [unscriptedError, setUnscriptedError] = useState(null);
   const [hasQuestion, setHasQuestion] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
@@ -83,7 +84,9 @@ function MainApp() {
 
   const handleUnscriptedEvaluate = async (audioFile, question = '', questionId = null) => {
     setUnscriptedLoading(true);
+    setOpenaiLoading(true);
     setUnscriptedError(null);
+    setUnscriptedResults(null);
     setHasQuestion(!!question.trim());
     setCurrentQuestion(question.trim());
 
@@ -97,17 +100,65 @@ function MainApp() {
     }
 
     try {
-      const response = await axios.post('/api/evaluate', formData, {
+      // STEP 1: Call Azure endpoint (fast) - get transcript and audio immediately
+      const azureResponse = await axios.post('/api/evaluate-azure', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           ...getAuthHeaders()
         },
       });
-      setUnscriptedResults(response.data);
+
+      const azureData = azureResponse.data;
+
+      // Show Azure results immediately (audio, transcript, pronunciation/fluency bands)
+      setUnscriptedResults({
+        audio_data: azureData.audio_data,
+        speech_score: azureData.speech_score,
+        transcript: azureData.transcript,
+        azure_scores: azureData.azure_scores,
+        // Partial combined_result with just Azure bands
+        combined_result: {
+          pronunciation: azureData.azure_scores?.pronunciation_band,
+          fluency: azureData.azure_scores?.fluency_band,
+        },
+        openai_result: null,  // Will be filled later
+        _loading_openai: true  // Flag to show loading for detailed feedback
+      });
+
+      // Azure is done, stop main loading
+      setUnscriptedLoading(false);
+
+      // STEP 2: Call OpenAI endpoint (parallel/after) - get detailed feedback
+      const openaiFormData = new FormData();
+      openaiFormData.append('transcript', azureData.transcript || '');
+      if (question.trim()) {
+        openaiFormData.append('question', question.trim());
+      }
+      openaiFormData.append('pronunciation_band', azureData.azure_scores?.pronunciation_band || 5.0);
+      openaiFormData.append('fluency_band', azureData.azure_scores?.fluency_band || 5.0);
+
+      const openaiResponse = await axios.post('/api/evaluate-openai', openaiFormData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...getAuthHeaders()
+        },
+      });
+
+      const openaiData = openaiResponse.data;
+
+      // Merge OpenAI results with existing Azure results
+      setUnscriptedResults(prev => ({
+        ...prev,
+        openai_result: openaiData.openai_result,
+        combined_result: openaiData.combined_result,
+        _loading_openai: false
+      }));
+
     } catch (err) {
       setUnscriptedError(err.response?.data?.detail || err.message || 'Evaluation failed');
-    } finally {
       setUnscriptedLoading(false);
+    } finally {
+      setOpenaiLoading(false);
     }
   };
 
@@ -121,6 +172,7 @@ function MainApp() {
   const resetUnscripted = () => {
     setUnscriptedResults(null);
     setUnscriptedError(null);
+    setOpenaiLoading(false);
     setCurrentQuestion('');
     setHasQuestion(false);
   };
@@ -307,13 +359,14 @@ function MainApp() {
                 )}
 
                 {/* Score & Detailed Feedback */}
-                {(unscriptedResults.openai_result || unscriptedResults.combined_result) && (
+                {(unscriptedResults.openai_result || unscriptedResults.combined_result || unscriptedResults._loading_openai) && (
                   <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                     <FeedbackDetails
                       openaiResult={unscriptedResults.openai_result}
                       combinedResult={unscriptedResults.combined_result}
                       fluencyMetrics={unscriptedResults.speech_score?.fluency?.overall_metrics}
                       title="Speaking Score"
+                      isLoading={unscriptedResults._loading_openai}
                     />
                   </div>
                 )}
