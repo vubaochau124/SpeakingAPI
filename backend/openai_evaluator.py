@@ -203,7 +203,7 @@ class OpenAIEvaluator:
         # Extract IELTS band scores from OpenAI result (4 criteria)
         coherence_band = openai_result.get('coherence', {}).get('band', 1.0) or 1.0
         lexical_band = openai_result.get('lexical_resource', {}).get('band', 1.0) or 1.0
-        grammar_band = openai_result.get('grammatical_range_accuracy', {}).get('band', 1.0) or 1.0
+        grammar_band = openai_result.get('grammar', {}).get('band', 1.0) or 1.0
         topic_band = openai_result.get('topic_relevance', {}).get('band', 1.0) or 1.0
 
         # Round bands to nearest 0.5
@@ -236,7 +236,7 @@ class OpenAIEvaluator:
             'fluency': fluency_band,              # From Azure
             'coherence': coherence_band,          # From OpenAI
             'lexical_resource': lexical_band,     # From OpenAI
-            'grammatical_range_accuracy': grammar_band,  # From OpenAI
+            'grammar': grammar_band,  # From OpenAI
             'pronunciation': pronunciation_band,   # From Azure
             'topic_relevance': topic_band,        # From OpenAI
             'overall_band': overall_band
@@ -277,10 +277,10 @@ QUESTION/CONTEXT:
             dict: Improved answer with explanation
         """
         # Extract evaluation info from OpenAI result (IELTS bands)
-        grammar_errors = evaluation.get('grammatical_range_accuracy', {}).get('errors', [])
+        grammar_errors = evaluation.get('grammar', {}).get('errors', [])
         coherence_band = evaluation.get('coherence', {}).get('band', 'N/A')
         lexical_band = evaluation.get('lexical_resource', {}).get('band', 'N/A')
-        grammar_band = evaluation.get('grammatical_range_accuracy', {}).get('band', 'N/A')
+        grammar_band = evaluation.get('grammar', {}).get('band', 'N/A')
         topic_band = evaluation.get('topic_relevance', {}).get('band', 'N/A')
 
         # Minimal user prompt - system prompt is cached
@@ -306,7 +306,7 @@ Provide a JSON response:
   "estimated_band": {{
     "coherence": <float 1.0-9.0>,
     "lexical_resource": <float 1.0-9.0>,
-    "grammatical_range_accuracy": <float 1.0-9.0>,
+    "grammar": <float 1.0-9.0>,
     "topic_relevance": <float 1.0-9.0>
   }}
 }}
