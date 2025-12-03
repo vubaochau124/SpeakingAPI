@@ -3,7 +3,6 @@ import AudioInput from './components/AudioInput';
 import AudioPlayer from './components/AudioPlayer';
 import Transcript from './components/Transcript';
 import Relevance from './components/Relevance';
-import IELTSScore from './components/IELTSScore';
 import FeedbackDetails from './components/FeedbackDetails';
 import ImprovedAnswer from './components/ImprovedAnswer';
 import ConversationRolePlay from './components/ConversationRolePlay';
@@ -270,15 +269,6 @@ function MainApp() {
                   </div>
                 )}
 
-                {/* Speech Score */}
-                {unscriptedResults.speech_score?.scores && (
-                  <IELTSScore
-                    scores={unscriptedResults.speech_score.scores}
-                    title="Part 2 Score"
-                    detectedDialect={unscriptedResults.speech_score?.detected_dialect?.lang_id}
-                  />
-                )}
-
                 {/* Audio */}
                 <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                   <h3 className="text-xl font-bold text-white mb-4">Your Recording</h3>
@@ -316,25 +306,24 @@ function MainApp() {
                   </div>
                 )}
 
-                {/* Detailed Feedback */}
-                {(unscriptedResults.speech_score?.grammar || unscriptedResults.speech_score?.vocab || unscriptedResults.speech_score?.coherence || unscriptedResults.speech_score?.fluency) && (
+                {/* Score & Detailed Feedback */}
+                {(unscriptedResults.openai_result || unscriptedResults.combined_result) && (
                   <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                     <FeedbackDetails
-                      grammar={unscriptedResults.speech_score.grammar}
-                      vocab={unscriptedResults.speech_score.vocab}
-                      coherence={unscriptedResults.speech_score.coherence}
-                      fluency={unscriptedResults.speech_score.fluency}
-                      wordList={unscriptedResults.speech_score.word_score_list}
+                      openaiResult={unscriptedResults.openai_result}
+                      combinedResult={unscriptedResults.combined_result}
+                      fluencyMetrics={unscriptedResults.speech_score?.fluency?.overall_metrics}
+                      title="Speaking Score"
                     />
                   </div>
                 )}
 
                 {/* Improved Answer Suggestion */}
-                {unscriptedResults.speech_score?.improved_answer && (
+                {unscriptedResults.openai_result?.improved_answer && (
                   <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                     <ImprovedAnswer
-                      improvedAnswerData={unscriptedResults.speech_score.improved_answer}
-                      originalTranscript={unscriptedResults.speech_score.transcript}
+                      improvedAnswerData={unscriptedResults.openai_result.improved_answer}
+                      originalTranscript={unscriptedResults.speech_score?.transcript}
                     />
                   </div>
                 )}

@@ -144,6 +144,51 @@ def convert_to_wav(input_path: str) -> str:
         return input_path
 
 
+def azure_score_to_ielts(azure_score):
+    """Convert Azure 0-100 score to IELTS 1.0-9.0 band (0.5 increments)
+
+    Args:
+        azure_score (float): Azure score 0-100
+
+    Returns:
+        float: IELTS band 1.0-9.0
+    """
+    if azure_score >= 95:
+        return 9.0
+    elif azure_score >= 90:
+        return 8.5
+    elif azure_score >= 85:
+        return 8.0
+    elif azure_score >= 80:
+        return 7.5
+    elif azure_score >= 75:
+        return 7.0
+    elif azure_score >= 70:
+        return 6.5
+    elif azure_score >= 65:
+        return 6.0
+    elif azure_score >= 60:
+        return 5.5
+    elif azure_score >= 55:
+        return 5.0
+    elif azure_score >= 50:
+        return 4.5
+    elif azure_score >= 45:
+        return 4.0
+    elif azure_score >= 40:
+        return 3.5
+    elif azure_score >= 35:
+        return 3.0
+    elif azure_score >= 30:
+        return 2.5
+    elif azure_score >= 20:
+        return 2.0
+    elif azure_score >= 10:
+        return 1.5
+    else:
+        return 1.0
+
+
 def calculate_azure_score(results):
     """Calculate overall score from Azure results
 
@@ -151,48 +196,39 @@ def calculate_azure_score(results):
         results (dict): Azure API response
 
     Returns:
-        dict: Overall scores
+        dict: Overall scores with raw 0-100 and IELTS bands for pronunciation and fluency
     """
     speech_score = results.get('speech_score', {})
     scores = speech_score.get('scores', {})
 
-    # Get scores (already 0-100)
+    # Get raw scores (0-100)
     pronunciation = scores.get('pronunciation', 0) or 0
     fluency = scores.get('fluency', 0) or 0
     accuracy = scores.get('accuracy', 0) or 0
+    prosody = scores.get('prosody', 0) or 0
 
-    # Calculate total score
-    total = (pronunciation * 0.4 + fluency * 0.3 + accuracy * 0.3)
+    # Calculate weighted average for pronunciation band (excludes fluency - that's separate)
+    # Pronunciation = weighted combination of pronunciation, accuracy, prosody
+    pronunciation_raw = (pronunciation * 0.5 + accuracy * 0.3 + prosody * 0.2)
+
+    # Convert to IELTS bands
+    pronunciation_band = azure_score_to_ielts(pronunciation_raw)
+    fluency_band = azure_score_to_ielts(fluency)
 
     result = {
-        'pronunciation': pronunciation,
-        'fluency': fluency,
-        'accuracy': accuracy,
-        'total_score': round(total, 2),
-        'grade': ''
+        # Raw 0-100 scores
+        'raw_scores': {
+            'pronunciation': pronunciation,
+            'fluency': fluency,
+            'accuracy': accuracy,
+            'prosody': prosody
+        },
+        # IELTS bands
+        'pronunciation_band': pronunciation_band,
+        'fluency_band': fluency_band,
+        # Legacy total score for backwards compatibility
+        'total_score': round(pronunciation_raw, 2)
     }
-
-    # Assign grade based on total
-    if total >= 90:
-        result['grade'] = 'A+'
-    elif total >= 85:
-        result['grade'] = 'A'
-    elif total >= 80:
-        result['grade'] = 'A-'
-    elif total >= 75:
-        result['grade'] = 'B+'
-    elif total >= 70:
-        result['grade'] = 'B'
-    elif total >= 65:
-        result['grade'] = 'B-'
-    elif total >= 60:
-        result['grade'] = 'C+'
-    elif total >= 55:
-        result['grade'] = 'C'
-    elif total >= 50:
-        result['grade'] = 'C-'
-    else:
-        result['grade'] = 'D'
 
     return result
 
@@ -1092,58 +1128,76 @@ async def submit_assignment(
         # Initialize Azure Speech API
         client = AzureSpeechAPI()
 
-        # Get evaluation results
-        results = client.score_audio(
-            audio_file_path=filepath,
-            relevance_context=assignment.question_text
-        )
+        # OPTIMIZED: Run Azure Pass 2 and OpenAI enhancement in PARALLEL
+        # Step 1: Prepare audio (convert to WAV if needed)
+        wav_path, needs_cleanup = client.prepare_audio(filepath)
 
-        azure_original = json.loads(json.dumps(results))
-        azure_score = calculate_azure_score(results)
+        # Step 2: Get transcript (Pass 1 - Whisper)
+        transcript = client.transcribe_only(wav_path)
 
-        # OpenAI enhancement
-        openai_enhanced_data = None
-        openai_score = None
-        try:
-            openai_client = OpenAIEvaluator()
-            transcript = results.get('speech_score', {}).get('transcript', '')
+        # Step 3: Run Azure pronunciation assessment first
+        import time
+        start_time = time.time()
 
-            if transcript:
-                enhanced = openai_client.enhance_evaluation(
+        print(f"[Assignment] Running Azure pronunciation assessment...")
+        azure_result = client.assess_pronunciation_only(wav_path, transcript)
+
+        # Clean up temp WAV file
+        if needs_cleanup and os.path.exists(wav_path):
+            try:
+                os.remove(wav_path)
+            except Exception:
+                pass
+
+        # Store raw Azure results as unscripted_result
+        unscripted_result = json.loads(json.dumps(azure_result))  # Deep copy
+
+        # Calculate Azure scores and get pronunciation/fluency IELTS bands
+        azure_score = calculate_azure_score(azure_result)
+        pronunciation_band = azure_score.get('pronunciation_band', 5.0)
+        fluency_band = azure_score.get('fluency_band', 5.0)
+        print(f" Azure Pronunciation Band: {pronunciation_band}/9.0")
+        print(f" Azure Fluency Band: {fluency_band}/9.0")
+
+        # Step 4: Run OpenAI evaluation with Azure pronunciation and fluency bands
+        print(f"[Assignment] Running OpenAI evaluation...")
+        openai_result = None
+        combined_result = None
+
+        if transcript:
+            try:
+                openai_client = OpenAIEvaluator()
+                evaluation = openai_client.enhance_evaluation(
                     transcript=transcript,
-                    question=assignment.question_text
+                    question=assignment.question_text,
+                    azure_pronunciation_band=pronunciation_band,
+                    azure_fluency_band=fluency_band
                 )
-                openai_score = enhanced.get('openai_overall_score', {})
-                openai_enhanced_data = enhanced
+                openai_result = evaluation.get('openai_result', {})
+                combined_result = evaluation.get('combined_result', {})
+                print(f" Combined Overall Band: {combined_result.get('overall_band', 'N/A')}/9.0")
+            except Exception as e:
+                print(f" OpenAI evaluation failed: {e}")
+                openai_result = None
+                combined_result = None
 
-                # Update results with OpenAI data
-                if 'speech_score' in results:
-                    if 'grammar' in enhanced:
-                        results['speech_score']['grammar'] = enhanced['grammar']
-                    if 'vocab' in enhanced:
-                        results['speech_score']['vocab'] = enhanced['vocab']
-                    if 'coherence' in enhanced:
-                        results['speech_score']['coherence'] = enhanced['coherence']
-                    if 'relevance' in enhanced:
-                        results['speech_score']['relevance'] = enhanced['relevance']
-                    if 'improved_answer' in enhanced:
-                        results['speech_score']['improved_answer'] = enhanced['improved_answer']
+        elapsed = time.time() - start_time
+        print(f"[Assignment] Total evaluation time: {elapsed:.2f}s")
 
-        except Exception as e:
-            print(f"OpenAI enhancement failed: {e}")
-
-        # Calculate combined score
-        scores_data = {
-            'azure': azure_score,
-            'openai': openai_score if openai_score else None,
+        # Build results structure
+        results = {
+            'speech_score': azure_result.get('speech_score', {}),
+            'unscripted_result': unscripted_result,
+            'openai_result': openai_result,
+            'combined_result': combined_result
         }
-        if openai_score:
-            combined_total = (azure_score['total_score'] + openai_score.get('total_score', 0)) / 2
-            scores_data['combined'] = {
-                'azure_score': azure_score['total_score'],
-                'openai_score': openai_score.get('total_score', 0),
-                'combined_score': round(combined_total, 2)
-            }
+
+        # Calculate scores_data for database
+        scores_data = {
+            'unscripted_result': azure_score,
+            'openai_result': openai_result,
+            'combined_result': combined_result
+        }
 
         # Read audio for response
         with open(filepath, 'rb') as audio_file:
@@ -1156,9 +1210,9 @@ async def submit_assignment(
             mime_type = mime_types.get(ext, 'audio/wav')
             audio_base64 = f"data:{mime_type};base64,{audio_data}"
 
-        transcript = results.get('speech_score', {}).get('transcript', '')
+        db_transcript = results.get('speech_score', {}).get('transcript', '') or transcript
 
-        # Save audio file permanently with unique name (for future use when column is added)
+        # Save audio file permanently with unique name
         import uuid
         audio_filename = f"{assignment_id}_{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
         permanent_audio_path = os.path.join(AUDIO_FOLDER, audio_filename)
@@ -1169,10 +1223,10 @@ async def submit_assignment(
         assignment_result = AssignmentResult(
             assignment_id=assignment_id,
             student_id=current_user.id,
-            transcript=transcript,
+            transcript=db_transcript,
             audio_filename=audio_filename,
-            azure_result=azure_original,
-            openai_result=openai_enhanced_data,
+            azure_result=unscripted_result,
+            openai_result=openai_result,
             scores=scores_data
         )
         db.add(assignment_result)
@@ -1624,175 +1678,106 @@ async def evaluate_audio(
         # Initialize Azure Speech API
         client = AzureSpeechAPI()
 
-        # Get evaluation results from Azure
-        results = client.score_audio(
-            audio_file_path=filepath,
-            relevance_context=question or ""
-        )
+        # OPTIMIZED: Run Azure Pass 2 and OpenAI enhancement in PARALLEL
+        # Step 1: Prepare audio (convert to WAV if needed)
+        wav_path, needs_cleanup = client.prepare_audio(filepath)
 
-        # Store original Azure results
-        azure_original = json.loads(json.dumps(results))  # Deep copy
+        # Step 2: Get transcript (Pass 1 - Whisper)
+        transcript = client.transcribe_only(wav_path)
 
-        # Calculate Azure score
-        azure_score = calculate_azure_score(results)
-        print(f"\n Azure Score: {azure_score['total_score']}/100 ({azure_score['grade']})")
+        # Step 3: Run Azure pronunciation assessment first
+        import time
+        start_time = time.time()
 
-        # Save Azure results to unscripted_result.json
+        print(f"\n[Evaluation] Running Azure pronunciation assessment...")
+        azure_result = client.assess_pronunciation_only(wav_path, transcript)
+
+        # Clean up temp WAV file
+        if needs_cleanup and os.path.exists(wav_path):
+            try:
+                os.remove(wav_path)
+            except Exception:
+                pass
+
+        # Store raw Azure results as unscripted_result
+        unscripted_result = json.loads(json.dumps(azure_result))  # Deep copy
+
+        # Calculate Azure scores and get pronunciation/fluency IELTS bands
+        azure_score = calculate_azure_score(azure_result)
+        pronunciation_band = azure_score.get('pronunciation_band', 5.0)
+        fluency_band = azure_score.get('fluency_band', 5.0)
+        print(f" Azure Pronunciation Band: {pronunciation_band}/9.0")
+        print(f" Azure Fluency Band: {fluency_band}/9.0")
+
+        # Save unscripted_result.json (raw Azure result)
         unscripted_filepath = os.path.join(RESULTS_FOLDER, 'unscripted_result.json')
         with open(unscripted_filepath, 'w', encoding='utf-8') as f:
-            json.dump(azure_original, f, indent=2, ensure_ascii=False)
-        print(f" Azure results saved to: {unscripted_filepath}")
+            json.dump({
+                'transcript': transcript,
+                'question': question,
+                'azure_raw': unscripted_result,
+                'azure_scores': azure_score,
+                'timestamp': datetime.now().isoformat()
+            }, f, indent=2, ensure_ascii=False)
+        print(f" Unscripted result saved to: {unscripted_filepath}")
 
-        # Enhance grammar, vocab, and coherence with OpenAI
-        openai_enhanced_data = None
-        openai_score = None
-        try:
-            print("\n" + "="*60)
-            print("ATTEMPTING OPENAI ENHANCEMENT")
-            print("="*60)
+        # Step 4: Run OpenAI evaluation with Azure pronunciation and fluency bands
+        print(f"\n[Evaluation] Running OpenAI evaluation...")
+        openai_result = None
+        combined_result = None
 
-            openai_client = OpenAIEvaluator()
-
-            # Extract transcript from Azure results
-            transcript = results.get('speech_score', {}).get('transcript', '')
-
-            if transcript:
-                print(f"\n Transcript extracted: {transcript[:100]}...")
-                print(" Sending to OpenAI GPT-4 for enhanced analysis...")
-
-                enhanced = openai_client.enhance_evaluation(
+        if transcript:
+            try:
+                openai_client = OpenAIEvaluator()
+                evaluation = openai_client.enhance_evaluation(
                     transcript=transcript,
-                    question=question
+                    question=question,
+                    azure_pronunciation_band=pronunciation_band,
+                    azure_fluency_band=fluency_band
                 )
+                openai_result = evaluation.get('openai_result', {})
+                combined_result = evaluation.get('combined_result', {})
 
-                # Extract OpenAI score
-                openai_score = enhanced.get('openai_overall_score', {})
-                print(f"\n OpenAI Score: {openai_score.get('total_score', 0)}/100 ({openai_score.get('grade', 'N/A')})")
+                print(f" OpenAI evaluation complete")
+                print(f" Combined Overall Band: {combined_result.get('overall_band', 'N/A')}/9.0")
+            except Exception as e:
+                print(f" OpenAI evaluation failed: {e}")
+                openai_result = None
+                combined_result = None
 
-                # 1. Save basic OpenAI evaluation to openai_result.json
-                openai_basic_data = {
-                    'transcript': transcript,
-                    'question': question,
-                    'grammar': enhanced.get('grammar', {}),
-                    'vocab': enhanced.get('vocab', {}),
-                    'coherence': enhanced.get('coherence', {}),
-                    'relevance': enhanced.get('relevance', {}),
-                    'scores': enhanced.get('scores', {}),
-                    'timestamp': datetime.now().isoformat()
-                }
-                openai_result_path = os.path.join(RESULTS_FOLDER, 'openai_result.json')
-                with open(openai_result_path, 'w', encoding='utf-8') as f:
-                    json.dump(openai_basic_data, f, indent=2, ensure_ascii=False)
-                print(f" OpenAI basic results saved to: {openai_result_path}")
+        elapsed = time.time() - start_time
+        print(f"\n[Evaluation] Total evaluation time: {elapsed:.2f}s")
 
-                # 2. Save enhanced OpenAI evaluation to openai_enhance_result.json
-                openai_enhanced_data = {
-                    'transcript': transcript,
-                    'question': question,
-                    'evaluation': enhanced,
-                    'overall_score': openai_score,
-                    'improved_answer': enhanced.get('improved_answer', ''),
-                    'timestamp': datetime.now().isoformat()
-                }
-                openai_enhanced_path = os.path.join(RESULTS_FOLDER, 'openai_enhance_result.json')
-                with open(openai_enhanced_path, 'w', encoding='utf-8') as f:
-                    json.dump(openai_enhanced_data, f, indent=2, ensure_ascii=False)
-                print(f" OpenAI enhanced results saved to: {openai_enhanced_path}")
+        # Save openai_result.json
+        openai_result_path = os.path.join(RESULTS_FOLDER, 'openai_result.json')
+        with open(openai_result_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'transcript': transcript,
+                'question': question,
+                'openai_result': openai_result,
+                'timestamp': datetime.now().isoformat()
+            }, f, indent=2, ensure_ascii=False)
+        print(f" OpenAI result saved to: {openai_result_path}")
 
-                # Replace grammar, vocab, coherence sections with OpenAI's enhanced analysis
-                if 'speech_score' in results:
-                    if 'grammar' in enhanced:
-                        results['speech_score']['grammar'] = enhanced['grammar']
-                        print(" Grammar analysis added from OpenAI")
-                    if 'vocab' in enhanced:
-                        results['speech_score']['vocab'] = enhanced['vocab']
-                        print(" Vocabulary analysis added from OpenAI")
-                    if 'coherence' in enhanced:
-                        results['speech_score']['coherence'] = enhanced['coherence']
-                        print(" Coherence analysis added from OpenAI")
-                    if 'relevance' in enhanced:
-                        results['speech_score']['relevance'] = enhanced['relevance']
-                        print(" Relevance analysis added from OpenAI")
-
-                    # Add improved answer to results
-                    if 'improved_answer' in enhanced:
-                        results['speech_score']['improved_answer'] = enhanced['improved_answer']
-                        print(" Improved answer suggestion added")
-
-                    # Update scores with OpenAI's assessment (0-100)
-                    if 'scores' in enhanced and 'scores' in results['speech_score']:
-                        if 'grammar' in enhanced['scores']:
-                            results['speech_score']['scores']['grammar'] = enhanced['scores']['grammar']
-                        if 'vocab' in enhanced['scores']:
-                            results['speech_score']['scores']['vocab'] = enhanced['scores']['vocab']
-                        if 'coherence' in enhanced['scores']:
-                            results['speech_score']['scores']['coherence'] = enhanced['scores']['coherence']
-                        print(" Scores updated with OpenAI assessment")
-
-                # Calculate combined score
-                combined_score = {
-                    'azure_score': azure_score['total_score'],
-                    'openai_score': openai_score.get('total_score', 0),
-                    'combined_score': round((azure_score['total_score'] + openai_score.get('total_score', 0)) / 2, 2),
-                    'grade': ''
-                }
-                total = combined_score['combined_score']
-                if total >= 90:
-                    combined_score['grade'] = 'A+'
-                elif total >= 85:
-                    combined_score['grade'] = 'A'
-                elif total >= 80:
-                    combined_score['grade'] = 'A-'
-                elif total >= 75:
-                    combined_score['grade'] = 'B+'
-                elif total >= 70:
-                    combined_score['grade'] = 'B'
-                elif total >= 65:
-                    combined_score['grade'] = 'B-'
-                elif total >= 60:
-                    combined_score['grade'] = 'C+'
-                elif total >= 55:
-                    combined_score['grade'] = 'C'
-                elif total >= 50:
-                    combined_score['grade'] = 'C-'
-                else:
-                    combined_score['grade'] = 'D'
-
-                results['combined_score'] = combined_score
-                print(f"\n Combined Score: {combined_score['combined_score']}/100 ({combined_score['grade']})")
-
-                print("\n OPENAI ENHANCEMENT COMPLETE")
-                print("="*60 + "\n")
-            else:
-                print(" No transcript found in Azure results")
-
-        except Exception as e:
-            print("\n" + "="*60)
-            print(" OPENAI ENHANCEMENT FAILED")
-            print("="*60)
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {str(e)}")
-            import traceback
-            print(f"Traceback:\n{traceback.format_exc()}")
-            print("="*60)
-            print(" Continuing with Azure results only...")
-            print("="*60 + "\n")
-
-        # Save combined results (merged Azure + OpenAI)
-        combined_data = {
-            'azure': azure_original,
-            'openai': openai_enhanced_data.get('evaluation') if openai_enhanced_data else None,
-            'scores': {
-                'azure': azure_score,
-                'openai': openai_score if openai_score else None,
-                'combined': results.get('combined_score', None)
-            },
-            'timestamp': datetime.now().isoformat()
-        }
+        # Save combined_result.json (IELTS bands for all 5 criteria)
         combined_result_path = os.path.join(RESULTS_FOLDER, 'combined_result.json')
         with open(combined_result_path, 'w', encoding='utf-8') as f:
-            json.dump(combined_data, f, indent=2, ensure_ascii=False)
-        print(f" Combined results saved to: {combined_result_path}")
+            json.dump({
+                'transcript': transcript,
+                'question': question,
+                'combined_result': combined_result,
+                'improved_answer': openai_result.get('improved_answer') if openai_result else None,
+                'timestamp': datetime.now().isoformat()
+            }, f, indent=2, ensure_ascii=False)
+        print(f" Combined result saved to: {combined_result_path}")
+
+        # Build response with new structure
+        results = {
+            'speech_score': azure_result.get('speech_score', {}),
+            'unscripted_result': unscripted_result,
+            'openai_result': openai_result,
+            'combined_result': combined_result
+        }
 
         # Read audio file and convert to base64
         with open(filepath, 'rb') as audio_file:
@@ -1818,19 +1803,19 @@ async def evaluate_audio(
             UserResult.part_type == 'unscripted'
         ).first()
 
-        transcript = results.get('speech_score', {}).get('transcript', '')
+        db_transcript = results.get('speech_score', {}).get('transcript', '') or transcript
         scores_data = {
-            'azure': azure_score,
-            'openai': openai_score if openai_score else None,
-            'combined': results.get('combined_score', None)
+            'unscripted_result': azure_score,  # Raw Azure scores
+            'openai_result': openai_result,    # OpenAI 4-criteria evaluation
+            'combined_result': combined_result  # Combined IELTS bands (5 criteria)
         }
 
         if existing_result:
             # Update existing result
             existing_result.question_id = question_id
-            existing_result.transcript = transcript
-            existing_result.azure_result = azure_original
-            existing_result.openai_result = openai_enhanced_data.get('evaluation') if openai_enhanced_data else None
+            existing_result.transcript = db_transcript
+            existing_result.azure_result = unscripted_result
+            existing_result.openai_result = openai_result
             existing_result.scores = scores_data
             existing_result.updated_at = datetime.now()
         else:
@@ -1839,9 +1824,9 @@ async def evaluate_audio(
                 user_id=current_user.id,
                 part_type='unscripted',
                 question_id=question_id,
-                transcript=transcript,
-                azure_result=azure_original,
-                openai_result=openai_enhanced_data.get('evaluation') if openai_enhanced_data else None,
+                transcript=db_transcript,
+                azure_result=unscripted_result,
+                openai_result=openai_result,
                 scores=scores_data
             )
             db.add(new_result)
@@ -1849,21 +1834,21 @@ async def evaluate_audio(
         db.commit()
         print(f" Result saved to database for user {current_user.username}")
 
-        # Return merged results (for backward compatibility with frontend)
-        response_data = results.copy()
-        response_data['audio_data'] = audio_base64
-
-        # Add metadata for reference
-        response_data['_metadata'] = {
-            'azure_score': azure_score,
-            'openai_score': openai_score if openai_score else None,
-            'combined_score': results.get('combined_score', None),
-            'timestamp': datetime.now().isoformat(),
-            'sources': {
-                'azure_file': 'unscripted_result.json',
-                'openai_file': 'openai_result.json',
-                'openai_enhanced_file': 'openai_enhance_result.json',
-                'combined_file': 'combined_result.json'
+        # Build response with new structure
+        response_data = {
+            'speech_score': results.get('speech_score', {}),
+            'audio_data': audio_base64,
+            # New structured results
+            'unscripted_result': unscripted_result,  # Raw Azure pronunciation data
+            'openai_result': openai_result,          # OpenAI 4-criteria (fluency, lexical, grammar, topic)
+            'combined_result': combined_result,       # All 5 IELTS bands combined
+            '_metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'sources': {
+                    'unscripted_file': 'unscripted_result.json',
+                    'openai_file': 'openai_result.json',
+                    'combined_file': 'combined_result.json'
+                }
             }
         }
 

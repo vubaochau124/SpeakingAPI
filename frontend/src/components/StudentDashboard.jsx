@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import AssignmentPractice from './AssignmentPractice';
 import FeedbackDetails from './FeedbackDetails';
-import IELTSScore from './IELTSScore';
 import Transcript from './Transcript';
 import ImprovedAnswer from './ImprovedAnswer';
 
@@ -453,21 +452,6 @@ function StudentDashboard({ onStartPractice }) {
                 {/* AI Scores Tab */}
                 {resultTab === 'ai' && (
                   <div className="space-y-6">
-                    {/* IELTS Score Component - Same as Practice Mode */}
-                    {(result.scores?.azure || result.azure_result?.speech_score?.scores) && (
-                      <IELTSScore
-                        scores={{
-                          pronunciation: result.scores?.azure?.pronunciation || result.azure_result?.speech_score?.scores?.pronunciation,
-                          fluency: result.scores?.azure?.fluency || result.azure_result?.speech_score?.scores?.fluency,
-                          accuracy: result.scores?.azure?.accuracy || result.azure_result?.speech_score?.scores?.accuracy,
-                          grammar: result.openai_result?.scores?.grammar || result.scores?.openai?.grammar,
-                          vocab: result.openai_result?.scores?.vocab || result.scores?.openai?.vocab,
-                          coherence: result.openai_result?.scores?.coherence || result.scores?.openai?.coherence
-                        }}
-                        title="AI Speech Score"
-                      />
-                    )}
-
                     {/* Audio Player */}
                     {result.audio_url && (
                       <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
@@ -495,29 +479,24 @@ function StudentDashboard({ onStartPractice }) {
                       </div>
                     )}
 
-                    {/* Detailed AI Feedback using FeedbackDetails component */}
-                    {(result.openai_result?.grammar || result.openai_result?.vocab || result.openai_result?.coherence || result.azure_result?.speech_score?.fluency) && (
+                    {/* Score & Detailed AI Feedback */}
+                    {(result.scores?.openai_result || result.scores?.combined_result) && (
                       <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                         <FeedbackDetails
-                          grammar={result.openai_result?.grammar}
-                          vocab={result.openai_result?.vocab}
-                          coherence={result.openai_result?.coherence}
-                          fluency={result.azure_result?.speech_score?.fluency}
-                          wordList={result.azure_result?.speech_score?.word_score_list}
+                          openaiResult={result.scores?.openai_result}
+                          combinedResult={result.scores?.combined_result}
+                          fluencyMetrics={result.scores?.unscripted_result?.speech_score?.fluency?.overall_metrics || result.azure_result?.speech_score?.fluency?.overall_metrics}
+                          title="AI Speech Score"
                         />
                       </div>
                     )}
 
-                    {/* Improved Answer Suggestion - Same as Practice Mode */}
-                    {result.openai_result?.improved_answer && (
+                    {/* Improved Answer Suggestion */}
+                    {(result.scores?.openai_result?.improved_answer || result.openai_result?.improved_answer) && (
                       <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                         <ImprovedAnswer
-                          improvedAnswerData={
-                            typeof result.openai_result.improved_answer === 'string'
-                              ? { improved_answer: result.openai_result.improved_answer }
-                              : result.openai_result.improved_answer
-                          }
-                          originalTranscript={result.transcript || result.azure_result?.speech_score?.transcript}
+                          improvedAnswerData={result.scores?.openai_result?.improved_answer || result.openai_result?.improved_answer}
+                          originalTranscript={result.transcript}
                         />
                       </div>
                     )}

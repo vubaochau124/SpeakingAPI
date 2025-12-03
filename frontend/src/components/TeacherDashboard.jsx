@@ -754,54 +754,14 @@ function TeacherDashboard() {
                         <p className="text-white leading-relaxed">{selectedSubmission.transcript || 'No transcript available'}</p>
                       </div>
 
-                      {/* AI Scores Summary */}
-                      {selectedSubmission.scores?.azure && (
-                        <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
-                          <h4 className="text-lg font-semibold text-blue-300 mb-4">AI Scores Summary</h4>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                              <p className="text-xs text-slate-400">Overall</p>
-                              <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.total_score)}`}>
-                                {selectedSubmission.scores.azure.total_score?.toFixed(0) || '-'}%
-                              </p>
-                            </div>
-                            {selectedSubmission.scores.azure.pronunciation_score !== undefined && (
-                              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                                <p className="text-xs text-slate-400">Pronunciation</p>
-                                <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.pronunciation_score)}`}>
-                                  {selectedSubmission.scores.azure.pronunciation_score?.toFixed(0) || '-'}%
-                                </p>
-                              </div>
-                            )}
-                            {selectedSubmission.scores.azure.fluency_score !== undefined && (
-                              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                                <p className="text-xs text-slate-400">Fluency</p>
-                                <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.fluency_score)}`}>
-                                  {selectedSubmission.scores.azure.fluency_score?.toFixed(0) || '-'}%
-                                </p>
-                              </div>
-                            )}
-                            {selectedSubmission.scores.azure.completeness_score !== undefined && (
-                              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                                <p className="text-xs text-slate-400">Completeness</p>
-                                <p className={`text-2xl font-bold ${getScoreColor(selectedSubmission.scores.azure.completeness_score)}`}>
-                                  {selectedSubmission.scores.azure.completeness_score?.toFixed(0) || '-'}%
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Detailed AI Feedback */}
-                      {(selectedSubmission.openai_result || selectedSubmission.azure_result?.speech_score) && (
+                      {/* Score & Detailed AI Feedback */}
+                      {(selectedSubmission.scores?.openai_result || selectedSubmission.scores?.combined_result) && (
                         <div className="mb-4">
                           <FeedbackDetails
-                            grammar={selectedSubmission.openai_result?.grammar}
-                            vocab={selectedSubmission.openai_result?.vocab}
-                            coherence={selectedSubmission.openai_result?.coherence}
-                            fluency={selectedSubmission.azure_result?.speech_score?.fluency}
-                            wordList={selectedSubmission.azure_result?.speech_score?.words}
+                            openaiResult={selectedSubmission.scores?.openai_result}
+                            combinedResult={selectedSubmission.scores?.combined_result}
+                            fluencyMetrics={selectedSubmission.scores?.unscripted_result?.speech_score?.fluency?.overall_metrics}
+                            title="AI Evaluation"
                           />
                         </div>
                       )}

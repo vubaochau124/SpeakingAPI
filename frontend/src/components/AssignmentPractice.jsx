@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import AudioPlayer from './AudioPlayer';
-import IELTSScore from './IELTSScore';
 import Transcript from './Transcript';
 import Relevance from './Relevance';
 import FeedbackDetails from './FeedbackDetails';
@@ -303,15 +302,6 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
               </div>
             </div>
 
-            {/* Speech Score */}
-            {results.speech_score?.scores && (
-              <IELTSScore
-                scores={results.speech_score.scores}
-                title="Assignment Score"
-                detectedDialect={results.speech_score?.detected_dialect?.lang_id}
-              />
-            )}
-
             {/* Audio */}
             <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
               <h3 className="text-xl font-bold text-white mb-4">Your Recording</h3>
@@ -346,25 +336,24 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
               </div>
             )}
 
-            {/* Detailed Feedback */}
-            {(results.speech_score?.grammar || results.speech_score?.vocab || results.speech_score?.coherence || results.speech_score?.fluency) && (
+            {/* Score & Detailed Feedback */}
+            {(results.openai_result || results.combined_result) && (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                 <FeedbackDetails
-                  grammar={results.speech_score.grammar}
-                  vocab={results.speech_score.vocab}
-                  coherence={results.speech_score.coherence}
-                  fluency={results.speech_score.fluency}
-                  wordList={results.speech_score.word_score_list}
+                  openaiResult={results.openai_result}
+                  combinedResult={results.combined_result}
+                  fluencyMetrics={results.speech_score?.fluency?.overall_metrics}
+                  title="Assignment Score"
                 />
               </div>
             )}
 
-            {/* Improved Answer */}
-            {results.speech_score?.improved_answer && (
+            {/* Improved Answer - Check both new and legacy locations */}
+            {(results.openai_result?.improved_answer || results.speech_score?.improved_answer) && (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
                 <ImprovedAnswer
-                  improvedAnswerData={results.speech_score.improved_answer}
-                  originalTranscript={results.speech_score.transcript}
+                  improvedAnswerData={results.openai_result?.improved_answer || results.speech_score?.improved_answer}
+                  originalTranscript={results.speech_score?.transcript}
                 />
               </div>
             )}
