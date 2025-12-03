@@ -665,8 +665,8 @@ class AzureSpeechAPI:
         total_duration = sum(r.get('Duration', 0) for r in all_results)
         audio_duration_sec = total_duration / 10000000 if total_duration else 5
 
-        # Build word_score_list
-        word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
+        # Use raw Azure word format directly (no transformation)
+        word_score_list = all_words
 
         # Fluency metrics
         fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
@@ -820,8 +820,8 @@ class AzureSpeechAPI:
             total_duration = sum(r.get('Duration', 0) for r in all_results)
             audio_duration_sec = total_duration / 10000000 if total_duration else 5
 
-            # Build word_score_list
-            word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
+            # Use raw Azure word format directly (no transformation)
+            word_score_list = all_words
 
             # Fluency metrics
             fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
@@ -980,7 +980,8 @@ class AzureSpeechAPI:
             total_duration = sum(r.get('Duration', 0) for r in all_results)
             audio_duration_sec = total_duration / 10000000 if total_duration else 5
 
-            word_score_list = [self._map_azure_to_frontend_word(w) for w in all_words]
+            # Use raw Azure word format directly (no transformation)
+            word_score_list = all_words
 
             fluency_metrics = self._calculate_fluency_metrics(all_words, audio_duration_sec)
 
