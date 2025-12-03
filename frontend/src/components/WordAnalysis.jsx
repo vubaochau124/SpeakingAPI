@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import {
+  getWord,
+  getWordScore,
+  getPhonemes,
+  getPhonemeText,
+  getPhonemeScore
+} from '../utils/azureWordUtils';
 
 function WordAnalysis({ wordList }) {
   const [selectedWord, setSelectedWord] = useState(null);
@@ -35,16 +42,16 @@ function WordAnalysis({ wordList }) {
             key={index}
             onClick={() => setSelectedWord(wordInfo)}
             className={`cursor-pointer px-4 py-2 rounded-xl border-2 transition-all duration-300 hover:scale-105 ${
-              selectedWord?.word === wordInfo.word
+              selectedWord && getWord(selectedWord) === getWord(wordInfo)
                 ? 'border-cyan-500 bg-cyan-500/20'
                 : 'border-cyan-600/30 bg-cyan-900/20 hover:border-cyan-500/50'
             }`}
           >
             <div className="font-semibold text-lg text-white">
-              {wordInfo.word}
+              {getWord(wordInfo)}
             </div>
-            <div className={`text-sm ${getScoreColor(wordInfo.quality_score)}`}>
-              Score: {wordInfo.quality_score}
+            <div className={`text-sm ${getScoreColor(getWordScore(wordInfo))}`}>
+              Score: {getWordScore(wordInfo)}
             </div>
           </div>
         ))}
@@ -60,66 +67,55 @@ function WordAnalysis({ wordList }) {
           {/* Word Header */}
           <div className="mb-4 pb-4 border-b border-slate-700/50">
             <h4 className="text-2xl font-bold text-white">
-              {selectedWord.word}
+              {getWord(selectedWord)}
             </h4>
             <p className="text-sm text-slate-400">
               Overall Quality Score:{' '}
-              <span className="font-semibold text-white">{selectedWord.quality_score}</span>
+              <span className="font-semibold text-white">{getWordScore(selectedWord)}</span>
             </p>
           </div>
 
           {/* Phonemes */}
           <div className="space-y-3">
-            {selectedWord.phone_score_list.map((phone, index) => (
-              <div
-                key={index}
-                className={`rounded-xl p-4 border ${getScoreBorderColor(phone.quality_score)} ${getScoreBgColor(phone.quality_score)} hover:translate-x-2 transition-all duration-300`}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="text-sm text-slate-400 mb-1">
-                      Phoneme {index + 1}
-                    </div>
-                    <div className="text-2xl font-bold text-cyan-400 mb-2">
-                      /{phone.phone}/
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
+            {getPhonemes(selectedWord).map((phone, index) => {
+              const phoneScore = getPhonemeScore(phone);
+              return (
+                <div
+                  key={index}
+                  className={`rounded-xl p-4 border ${getScoreBorderColor(phoneScore)} ${getScoreBgColor(phoneScore)} hover:translate-x-2 transition-all duration-300`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="text-sm text-slate-400 mb-1">
+                        Phoneme {index + 1}
+                      </div>
+                      <div className="text-2xl font-bold text-cyan-400 mb-2">
+                        /{getPhonemeText(phone)}/
+                      </div>
+                      <div className="text-sm">
                         <span className="text-slate-400">Score:</span>
                         <span
-                          className={`font-semibold ml-1 ${getScoreColor(
-                            phone.quality_score
-                          )}`}
+                          className={`font-semibold ml-1 ${getScoreColor(phoneScore)}`}
                         >
-                          {phone.quality_score}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Sounds like:</span>
-                        <span className="font-semibold text-white ml-1">
-                          /{phone.sound_most_like}/
+                          {phoneScore}
                         </span>
                       </div>
                     </div>
-                  </div>
-                  <div className="ml-4">
-                    <div
-                      className={`w-16 h-16 rounded-full border-2 ${getScoreBorderColor(phone.quality_score)} ${getScoreBgColor(
-                        phone.quality_score
-                      )} flex items-center justify-center`}
-                    >
-                      <span
-                        className={`text-2xl font-bold ${getScoreColor(
-                          phone.quality_score
-                        )}`}
+                    <div className="ml-4">
+                      <div
+                        className={`w-16 h-16 rounded-full border-2 ${getScoreBorderColor(phoneScore)} ${getScoreBgColor(phoneScore)} flex items-center justify-center`}
                       >
-                        {phone.quality_score}
-                      </span>
+                        <span
+                          className={`text-2xl font-bold ${getScoreColor(phoneScore)}`}
+                        >
+                          {phoneScore}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

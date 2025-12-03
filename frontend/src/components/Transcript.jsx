@@ -1,5 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  getWord,
+  getWordScore,
+  getPhonemes,
+  getSyllables,
+  getPhonemeText,
+  getPhonemeScore,
+  getSyllableText,
+  getSyllableScore,
+  getWordPlaybackTiming,
+  getSyllablePlaybackTiming,
+  getPhonemePlaybackTiming
+} from '../utils/azureWordUtils';
 
 function Transcript({ transcript, wordList, audioData }) {
   const [selectedWord, setSelectedWord] = useState(null);
@@ -40,41 +53,39 @@ function Transcript({ transcript, wordList, audioData }) {
     }
   };
 
-  const playWordAudio = (wordInfo) => {
+  const playAudio = (startSec, durationSec) => {
     if (!audioBufferRef.current || !audioContextRef.current) return;
-
-    // Get extent from syllables or phones
-    let startFrame = null;
-    let endFrame = null;
-
-    if (wordInfo.syllable_score_list && wordInfo.syllable_score_list.length > 0) {
-      startFrame = wordInfo.syllable_score_list[0].extent[0];
-      endFrame = wordInfo.syllable_score_list[wordInfo.syllable_score_list.length - 1].extent[1];
-    } else if (wordInfo.phone_score_list && wordInfo.phone_score_list.length > 0) {
-      startFrame = wordInfo.phone_score_list[0].extent[0];
-      endFrame = wordInfo.phone_score_list[wordInfo.phone_score_list.length - 1].extent[1];
-    }
-
-    if (startFrame === null || endFrame === null) return;
-
-    // Convert milliseconds to seconds (Azure returns offset/duration in milliseconds after backend conversion)
-    const startTime = startFrame / 1000;
-    const duration = (endFrame - startFrame) / 1000;
+    if (durationSec <= 0) return;
 
     // Add small padding for better playback
-    const paddedStart = Math.max(0, startTime - 0.05);
-    const paddedDuration = duration + 0.1;
+    const paddedStart = Math.max(0, startSec - 0.03);
+    const paddedDuration = durationSec + 0.06;
 
     // Create source and play
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBufferRef.current;
     source.connect(audioContextRef.current.destination);
 
-    console.log(`[Play Word] Start: ${paddedStart.toFixed(3)}s, Duration: ${paddedDuration.toFixed(3)}s`);
+    console.log(`[Play Audio] Start: ${paddedStart.toFixed(3)}s, Duration: ${paddedDuration.toFixed(3)}s`);
 
     setIsPlaying(true);
     source.start(0, paddedStart, paddedDuration);
     source.onended = () => setIsPlaying(false);
+  };
+
+  const playWordAudio = (wordInfo) => {
+    const { startSec, durationSec } = getWordPlaybackTiming(wordInfo);
+    playAudio(startSec, durationSec);
+  };
+
+  const playSyllableAudio = (syllable) => {
+    const { startSec, durationSec } = getSyllablePlaybackTiming(syllable);
+    playAudio(startSec, durationSec);
+  };
+
+  const playPhonemeAudio = (phoneme) => {
+    const { startSec, durationSec } = getPhonemePlaybackTiming(phoneme);
+    playAudio(startSec, durationSec);
   };
 
   const getWordColor = (score) => {
@@ -94,24 +105,17 @@ function Transcript({ transcript, wordList, audioData }) {
   };
 
   const getWordWithStress = (wordInfo) => {
-    if (!wordInfo.syllable_score_list || wordInfo.syllable_score_list.length < 2) {
-      return wordInfo.word;
+    const syllables = getSyllables(wordInfo);
+    if (syllables.length < 2) {
+      return getWord(wordInfo);
     }
 
-    let stressedWord = '';
-    for (const syllable of wordInfo.syllable_score_list) {
-      const letters = syllable.letters || '';
-      const stressLevel = syllable.stress_level || 0;
-
-      // Add IPA stress marker (ˈ) before stressed syllables
-      if (stressLevel === 1) {
-        stressedWord += 'ˈ' + letters;
-      } else {
-        stressedWord += letters;
-      }
+    // Azure raw format doesn't include stress info, just concatenate syllables
+    let result = '';
+    for (const syllable of syllables) {
+      result += getSyllableText(syllable, wordInfo);
     }
-
-    return stressedWord;
+    return result || getWord(wordInfo);
   };
 
   return (
@@ -125,13 +129,10 @@ function Transcript({ transcript, wordList, audioData }) {
           <span key={index} className="inline-flex items-baseline">
             <button
               onClick={() => setSelectedWord(wordInfo)}
-              className={`cursor-pointer px-2 py-1 rounded-lg transition-all duration-200 font-medium ${getWordColor(wordInfo.quality_score)}`}
+              className={`cursor-pointer px-2 py-1 rounded-lg transition-all duration-200 font-medium ${getWordColor(getWordScore(wordInfo))}`}
             >
-              {wordInfo.word}
+              {getWord(wordInfo)}
             </button>
-            {wordInfo.ending_punctuation && (
-              <span className="text-slate-500 ml-0.5">{wordInfo.ending_punctuation}</span>
-            )}
           </span>
         ))}
       </div>
@@ -151,11 +152,11 @@ function Transcript({ transcript, wordList, audioData }) {
             <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
               <div>
                 <h3 className="text-3xl font-bold text-white">{getWordWithStress(selectedWord)}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Original: {selectedWord.word}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Original: {getWord(selectedWord)}</p>
                 <p className="text-sm text-slate-400 mt-1">
                   Quality Score:{' '}
-                  <span className={`font-semibold ${getScoreColor(selectedWord.quality_score)}`}>
-                    {formatScore(selectedWord.quality_score)}
+                  <span className={`font-semibold ${getScoreColor(getWordScore(selectedWord))}`}>
+                    {formatScore(getWordScore(selectedWord))}
                   </span>
                 </p>
               </div>
@@ -180,42 +181,40 @@ function Transcript({ transcript, wordList, audioData }) {
                   </>
                 ) : (
                   <>
-                    <span>🔊</span> Hear "{selectedWord.word}"
+                    <span>🔊</span> Hear "{getWord(selectedWord)}"
                   </>
                 )}
               </button>
             )}
 
             {/* Syllables */}
-            {selectedWord.syllable_score_list && selectedWord.syllable_score_list.length > 0 && (
+            {getSyllables(selectedWord).length > 0 && (
               <div className="mb-4">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables</h4>
+                <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables (click to hear)</h4>
                 <div className="flex flex-wrap gap-2">
-                  {selectedWord.syllable_score_list.map((syl, i) => {
-                    const isStressed = syl.stress_level === 1;
-                    const showStress = selectedWord.syllable_score_list.length >= 2;
+                  {getSyllables(selectedWord).map((syl, i) => {
+                    const syllableScore = getSyllableScore(syl);
                     return (
-                      <div
+                      <button
                         key={i}
-                        className={`px-3 py-2 rounded-lg border ${
-                          syl.quality_score >= 90
-                            ? 'bg-emerald-500/20 border-emerald-500/30'
-                            : syl.quality_score >= 70
-                            ? 'bg-amber-500/20 border-amber-500/30'
-                            : 'bg-red-500/20 border-red-500/30'
+                        onClick={() => audioData && playSyllableAudio(syl)}
+                        disabled={!audioData || isPlaying}
+                        className={`px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
+                          syllableScore >= 90
+                            ? 'bg-emerald-500/20 border-emerald-500/30 hover:bg-emerald-500/30'
+                            : syllableScore >= 70
+                            ? 'bg-amber-500/20 border-amber-500/30 hover:bg-amber-500/30'
+                            : 'bg-red-500/20 border-red-500/30 hover:bg-red-500/30'
                         }`}
                       >
                         <span className="text-white font-medium">
-                          {showStress && isStressed && <span className="text-blue-400">ˈ</span>}
-                          {syl.letters}
+                          {getSyllableText(syl, selectedWord)}
                         </span>
-                        <span className={`ml-2 text-sm ${getScoreColor(syl.quality_score)}`}>
-                          {formatScore(syl.quality_score)}
+                        <span className={`ml-2 text-sm ${getScoreColor(syllableScore)}`}>
+                          {formatScore(syllableScore)}
                         </span>
-                        {showStress && isStressed && (
-                          <span className="ml-2 text-xs text-blue-400" title="Stressed syllable">●</span>
-                        )}
-                      </div>
+                        <span className="ml-2 text-xs">🔊</span>
+                      </button>
                     );
                   })}
                 </div>
@@ -223,39 +222,45 @@ function Transcript({ transcript, wordList, audioData }) {
             )}
 
             {/* Phonemes Table */}
-            <div className="overflow-y-auto max-h-64">
-              <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes</h4>
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-700/50">
-                    <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Phoneme</th>
-                    <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Score</th>
-                    <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Sounds Like</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedWord.phone_score_list.map((phone, index) => (
-                    <tr key={index} className="border-b border-slate-700/50">
-                      <td className="py-2 px-3">
-                        <span className="text-lg font-bold text-cyan-400">
-                          /{phone.phone}/
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`font-semibold ${getScoreColor(phone.quality_score)}`}>
-                          {formatScore(phone.quality_score)}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-slate-300">
-                          /{phone.sound_most_like}/
-                        </span>
-                      </td>
+            {getPhonemes(selectedWord).length > 0 && (
+              <div className="overflow-y-auto max-h-64">
+                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes (click to hear)</h4>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-700/50">
+                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Phoneme</th>
+                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Score</th>
+                      <th className="text-center py-2 px-3 font-medium text-slate-300 text-sm">Play</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {getPhonemes(selectedWord).map((phone, index) => (
+                      <tr key={index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <td className="py-2 px-3">
+                          <span className="text-lg font-bold text-cyan-400">
+                            /{getPhonemeText(phone)}/
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className={`font-semibold ${getScoreColor(getPhonemeScore(phone))}`}>
+                            {formatScore(getPhonemeScore(phone))}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            onClick={() => audioData && playPhonemeAudio(phone)}
+                            disabled={!audioData || isPlaying}
+                            className="p-1 rounded hover:bg-slate-600/50 transition-colors disabled:opacity-50"
+                          >
+                            🔊
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>,
         document.body

@@ -1,6 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import IELTSScore from './IELTSScore';
+import {
+  getWord,
+  getWordScore,
+  getPhonemes,
+  getSyllables,
+  getPhonemeText,
+  getPhonemeScore,
+  getSyllableText,
+  getSyllableScore,
+  getWordPlaybackTiming,
+  getSyllablePlaybackTiming,
+  getPhonemePlaybackTiming,
+  getErrorType
+} from '../utils/azureWordUtils';
 
 function ConversationResults({ results, conversationTexts, lineAudios, onTryAgain }) {
   const textScore = results?.text_score;
@@ -41,26 +55,12 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
     }
   };
 
-  const playWordAudio = (wordInfo) => {
+  const playAudio = (startSec, durationSec) => {
     if (!audioBufferRef.current || !audioContextRef.current) return;
+    if (durationSec <= 0) return;
 
-    let startFrame = null;
-    let endFrame = null;
-
-    if (wordInfo.syllable_score_list && wordInfo.syllable_score_list.length > 0) {
-      startFrame = wordInfo.syllable_score_list[0].extent[0];
-      endFrame = wordInfo.syllable_score_list[wordInfo.syllable_score_list.length - 1].extent[1];
-    } else if (wordInfo.phone_score_list && wordInfo.phone_score_list.length > 0) {
-      startFrame = wordInfo.phone_score_list[0].extent[0];
-      endFrame = wordInfo.phone_score_list[wordInfo.phone_score_list.length - 1].extent[1];
-    }
-
-    if (startFrame === null || endFrame === null) return;
-
-    const startTime = startFrame / 1000;
-    const duration = (endFrame - startFrame) / 1000;
-    const paddedStart = Math.max(0, startTime - 0.05);
-    const paddedDuration = duration + 0.1;
+    const paddedStart = Math.max(0, startSec - 0.03);
+    const paddedDuration = durationSec + 0.06;
 
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBufferRef.current;
@@ -69,6 +69,21 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
     setIsPlaying(true);
     source.start(0, paddedStart, paddedDuration);
     source.onended = () => setIsPlaying(false);
+  };
+
+  const playWordAudio = (wordInfo) => {
+    const { startSec, durationSec } = getWordPlaybackTiming(wordInfo);
+    playAudio(startSec, durationSec);
+  };
+
+  const playSyllableAudio = (syllable) => {
+    const { startSec, durationSec } = getSyllablePlaybackTiming(syllable);
+    playAudio(startSec, durationSec);
+  };
+
+  const playPhonemeAudio = (phoneme) => {
+    const { startSec, durationSec } = getPhonemePlaybackTiming(phoneme);
+    playAudio(startSec, durationSec);
   };
 
   // Get color class based on quality score
@@ -99,21 +114,17 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
   // Get word with stress markers
   const getWordWithStress = (wordInfo) => {
-    if (!wordInfo.syllable_score_list || wordInfo.syllable_score_list.length < 2) {
-      return wordInfo.word;
+    const syllables = getSyllables(wordInfo);
+    if (syllables.length < 2) {
+      return getWord(wordInfo);
     }
 
-    let stressedWord = '';
-    for (const syllable of wordInfo.syllable_score_list) {
-      const letters = syllable.letters || '';
-      const stressLevel = syllable.stress_level || 0;
-      if (stressLevel === 1) {
-        stressedWord += 'ˈ' + letters;
-      } else {
-        stressedWord += letters;
-      }
+    // Azure raw format doesn't include stress info, just concatenate syllables
+    let result = '';
+    for (const syllable of syllables) {
+      result += getSyllableText(syllable, wordInfo);
     }
-    return stressedWord;
+    return result || getWord(wordInfo);
   };
 
   // Map words to lines based on expected text word count
@@ -152,7 +163,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
   const lineMappings = mapWordsToLines();
 
   const getProblemWords = (words) => {
-    return words.filter(w => needsAttention(w.quality_score));
+    return words.filter(w => needsAttention(getWordScore(w)));
   };
 
   return (
@@ -217,19 +228,20 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                     <span className="text-slate-400 text-sm block mb-2">You said:</span>
                     <div className="flex flex-wrap gap-1">
                       {mapping.spokenWords.map((word, wordIdx) => {
-                        const isClickable = needsAttention(word.quality_score);
+                        const wordScore = getWordScore(word);
+                        const isClickable = needsAttention(wordScore);
 
                         return (
                           <span
                             key={wordIdx}
                             onClick={() => isClickable && setSelectedWord(word)}
-                            className={`px-2 py-1 rounded text-lg font-medium transition-all ${getWordColor(word.quality_score)} ${
+                            className={`px-2 py-1 rounded text-lg font-medium transition-all ${getWordColor(wordScore)} ${
                               isClickable
                                 ? 'cursor-pointer hover:scale-105 hover:bg-slate-600/50 underline decoration-dotted'
                                 : ''
                             }`}
                           >
-                            {word.word}
+                            {getWord(word)}
                           </span>
                         );
                       })}
@@ -249,8 +261,8 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                       <span className="text-slate-400 text-xs">
                         {problemWords.length} word{problemWords.length > 1 ? 's' : ''} need{problemWords.length === 1 ? 's' : ''} practice: {' '}
                         {problemWords.map((w, i) => (
-                          <span key={i} className={getWordColor(w.quality_score)}>
-                            {w.word}{i < problemWords.length - 1 ? ', ' : ''}
+                          <span key={i} className={getWordColor(getWordScore(w))}>
+                            {getWord(w)}{i < problemWords.length - 1 ? ', ' : ''}
                           </span>
                         ))}
                       </span>
@@ -321,7 +333,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
         Try Again
       </button>
 
-      {/* Word Detail Modal (same as Part 2) */}
+      {/* Word Detail Modal */}
       {selectedWord && createPortal(
         <>
           {/* Backdrop */}
@@ -336,11 +348,11 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
             <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
               <div>
                 <h3 className="text-3xl font-bold text-white">{getWordWithStress(selectedWord)}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Original: {selectedWord.word}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Original: {getWord(selectedWord)}</p>
                 <p className="text-sm text-slate-400 mt-1">
                   Quality Score:{' '}
-                  <span className={`font-semibold ${getScoreColor(selectedWord.quality_score)}`}>
-                    {formatScore(selectedWord.quality_score)}
+                  <span className={`font-semibold ${getScoreColor(getWordScore(selectedWord))}`}>
+                    {formatScore(getWordScore(selectedWord))}
                   </span>
                 </p>
               </div>
@@ -353,10 +365,10 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
             </div>
 
             {/* Error Type */}
-            {selectedWord.error_type && (
+            {getErrorType(selectedWord) && (
               <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
                 <span className="text-red-400 font-medium">
-                  Issue: {selectedWord.error_type.replace(/_/g, ' ')}
+                  Issue: {getErrorType(selectedWord).replace(/_/g, ' ')}
                 </span>
               </div>
             )}
@@ -374,36 +386,34 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                   </>
                 ) : (
                   <>
-                    <span>🔊</span> Hear "{selectedWord.word}"
+                    <span>🔊</span> Hear "{getWord(selectedWord)}"
                   </>
                 )}
               </button>
             )}
 
             {/* Syllables */}
-            {selectedWord.syllable_score_list && selectedWord.syllable_score_list.length > 0 && (
+            {getSyllables(selectedWord).length > 0 && (
               <div className="mb-4">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables</h4>
+                <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables (click to hear)</h4>
                 <div className="flex flex-wrap gap-2">
-                  {selectedWord.syllable_score_list.map((syl, i) => {
-                    const isStressed = syl.stress_level === 1;
-                    const showStress = selectedWord.syllable_score_list.length >= 2;
+                  {getSyllables(selectedWord).map((syl, i) => {
+                    const syllableScore = getSyllableScore(syl);
                     return (
-                      <div
+                      <button
                         key={i}
-                        className={`px-3 py-2 rounded-lg border ${getWordBgColor(syl.quality_score)}`}
+                        onClick={() => results?.audio_data && playSyllableAudio(syl)}
+                        disabled={!results?.audio_data || isPlaying}
+                        className={`px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${getWordBgColor(syllableScore)}`}
                       >
                         <span className="text-white font-medium">
-                          {showStress && isStressed && <span className="text-blue-400">ˈ</span>}
-                          {syl.letters}
+                          {getSyllableText(syl, selectedWord)}
                         </span>
-                        <span className={`ml-2 text-sm ${getScoreColor(syl.quality_score)}`}>
-                          {formatScore(syl.quality_score)}
+                        <span className={`ml-2 text-sm ${getScoreColor(syllableScore)}`}>
+                          {formatScore(syllableScore)}
                         </span>
-                        {showStress && isStressed && (
-                          <span className="ml-2 text-xs text-blue-400" title="Stressed syllable">●</span>
-                        )}
-                      </div>
+                        <span className="ml-2 text-xs">🔊</span>
+                      </button>
                     );
                   })}
                 </div>
@@ -411,34 +421,38 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
             )}
 
             {/* Phonemes Table */}
-            {selectedWord.phone_score_list && selectedWord.phone_score_list.length > 0 && (
+            {getPhonemes(selectedWord).length > 0 && (
               <div className="overflow-y-auto max-h-64">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes</h4>
+                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes (click to hear)</h4>
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-700/50">
                       <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Phoneme</th>
                       <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Score</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Sounds Like</th>
+                      <th className="text-center py-2 px-3 font-medium text-slate-300 text-sm">Play</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedWord.phone_score_list.map((phone, index) => (
-                      <tr key={index} className="border-b border-slate-700/50">
+                    {getPhonemes(selectedWord).map((phone, index) => (
+                      <tr key={index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                         <td className="py-2 px-3">
                           <span className="text-lg font-bold text-cyan-400">
-                            /{phone.phone}/
+                            /{getPhonemeText(phone)}/
                           </span>
                         </td>
                         <td className="py-2 px-3">
-                          <span className={`font-semibold ${getScoreColor(phone.quality_score)}`}>
-                            {formatScore(phone.quality_score)}
+                          <span className={`font-semibold ${getScoreColor(getPhonemeScore(phone))}`}>
+                            {formatScore(getPhonemeScore(phone))}
                           </span>
                         </td>
-                        <td className="py-2 px-3">
-                          <span className="font-medium text-slate-300">
-                            /{phone.sound_most_like}/
-                          </span>
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            onClick={() => results?.audio_data && playPhonemeAudio(phone)}
+                            disabled={!results?.audio_data || isPlaying}
+                            className="p-1 rounded hover:bg-slate-600/50 transition-colors disabled:opacity-50"
+                          >
+                            🔊
+                          </button>
                         </td>
                       </tr>
                     ))}
