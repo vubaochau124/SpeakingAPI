@@ -130,7 +130,7 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
   );
 
   // Loading skeleton for score cards
-  const LoadingSkeleton = () => (
+  const LoadingSkeleton = ({ label }) => (
     <div className="animate-pulse">
       <div className="p-5 rounded-xl border border-slate-600 bg-slate-700/50">
         <div className="flex items-start justify-between mb-4">
@@ -151,9 +151,40 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
           <div className="h-3 bg-slate-600 rounded w-4/5"></div>
           <div className="h-3 bg-slate-600 rounded w-3/5"></div>
         </div>
+        {label && (
+          <div className="mt-3 flex items-center gap-2 text-cyan-400 text-sm">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Analyzing {label}...
+          </div>
+        )}
       </div>
     </div>
   );
+
+  // Overview item with loading state
+  const OverviewItemWithLoading = ({ label, band, icon, isLoading }) => {
+    if (isLoading && (band === null || band === undefined)) {
+      return (
+        <div className="p-4 rounded-xl border border-slate-600 bg-slate-700/50 animate-pulse">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">{icon}</span>
+            <span className="text-slate-400 text-sm font-medium">{label}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-12 bg-slate-600 rounded"></div>
+            <svg className="animate-spin h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+        </div>
+      );
+    }
+    return <OverviewItem label={label} band={band} icon={icon} />;
+  };
 
   if (!openaiResult && !combinedResult && !isLoading) {
     return (
@@ -247,15 +278,35 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
 
       {/* Content Area */}
       <div className="min-h-[200px]">
-        {/* Overview Tab - 6 criteria grid */}
+        {/* Overview Tab - 6 criteria grid with progressive loading */}
         {activeTab === "overview" && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <OverviewItem label="Pronunciation" band={combinedResult?.pronunciation} icon="🎯" />
             <OverviewItem label="Fluency" band={combinedResult?.fluency} icon="🌊" />
-            <OverviewItem label="Grammar" band={openaiResult?.grammar?.band || combinedResult?.grammatical_range_accuracy} icon="📝" />
-            <OverviewItem label="Lexical" band={openaiResult?.lexical_resource?.band || combinedResult?.lexical_resource} icon="📚" />
-            <OverviewItem label="Coherence" band={openaiResult?.coherence?.band || combinedResult?.coherence} icon="🔗" />
-            <OverviewItem label="Relevance" band={openaiResult?.topic_relevance?.band || combinedResult?.topic_relevance} icon="💬" />
+            <OverviewItemWithLoading
+              label="Grammar"
+              band={openaiResult?.grammar?.band || combinedResult?.grammar}
+              icon="📝"
+              isLoading={isLoading}
+            />
+            <OverviewItemWithLoading
+              label="Lexical"
+              band={openaiResult?.lexical_resource?.band || combinedResult?.lexical_resource}
+              icon="📚"
+              isLoading={isLoading}
+            />
+            <OverviewItemWithLoading
+              label="Coherence"
+              band={openaiResult?.coherence?.band || combinedResult?.coherence}
+              icon="🔗"
+              isLoading={isLoading}
+            />
+            <OverviewItemWithLoading
+              label="Relevance"
+              band={openaiResult?.topic_relevance?.band || combinedResult?.topic_relevance}
+              icon="💬"
+              isLoading={isLoading}
+            />
           </div>
         )}
 
@@ -298,12 +349,12 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
 
         {/* Grammar Tab with Errors */}
         {activeTab === "grammar" && (
-          isLoading && !openaiResult ? (
-            <LoadingSkeleton />
+          isLoading && !openaiResult?.grammar ? (
+            <LoadingSkeleton label="grammar" />
           ) : (
             <ScoreCard
               title="Grammatical Range & Accuracy"
-              band={openaiResult?.grammar?.band || combinedResult?.grammatical_range_accuracy}
+              band={openaiResult?.grammar?.band || combinedResult?.grammar}
               feedback={openaiResult?.grammar?.feedback}
               icon="📝"
               showErrors={true}
@@ -314,8 +365,8 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
 
         {/* Lexical Resource Tab */}
         {activeTab === "lexical" && (
-          isLoading && !openaiResult ? (
-            <LoadingSkeleton />
+          isLoading && !openaiResult?.lexical_resource ? (
+            <LoadingSkeleton label="vocabulary" />
           ) : (
             <ScoreCard
               title="Lexical Resource"
@@ -328,8 +379,8 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
 
         {/* Coherence Tab */}
         {activeTab === "coherence" && (
-          isLoading && !openaiResult ? (
-            <LoadingSkeleton />
+          isLoading && !openaiResult?.coherence ? (
+            <LoadingSkeleton label="coherence" />
           ) : (
             <ScoreCard
               title="Coherence"
@@ -342,8 +393,8 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
 
         {/* Relevance Tab (Topic Relevance / Listening & Response) */}
         {activeTab === "relevance" && (
-          isLoading && !openaiResult ? (
-            <LoadingSkeleton />
+          isLoading && !openaiResult?.topic_relevance ? (
+            <LoadingSkeleton label="relevance" />
           ) : (
             <ScoreCard
               title="Topic Relevance"

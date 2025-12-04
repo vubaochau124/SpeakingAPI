@@ -128,7 +128,7 @@ function MainApp() {
       // Azure is done, stop main loading
       setUnscriptedLoading(false);
 
-      // STEP 2: Call OpenAI endpoint (parallel/after) - get detailed feedback
+      // STEP 2: Stream OpenAI results using SSE for progressive display
       const openaiFormData = new FormData();
       openaiFormData.append('transcript', azureData.transcript || '');
       if (question.trim()) {
@@ -137,20 +137,91 @@ function MainApp() {
       openaiFormData.append('pronunciation_band', azureData.azure_scores?.pronunciation_band || 5.0);
       openaiFormData.append('fluency_band', azureData.azure_scores?.fluency_band || 5.0);
 
-      const openaiResponse = await axios.post('/api/evaluate-openai', openaiFormData, {
+      // Use fetch with SSE streaming for progressive feedback display
+      const authToken = localStorage.getItem('token');
+      const response = await fetch('/api/evaluate-openai-stream', {
+        method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data',
-          ...getAuthHeaders()
+          'Authorization': `Bearer ${authToken}`
         },
+        body: openaiFormData
       });
 
-      const openaiData = openaiResponse.data;
+      if (!response.ok) {
+        throw new Error(`OpenAI evaluation failed: ${response.statusText}`);
+      }
 
-      // Merge OpenAI results with existing Azure results
+      // Read the SSE stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let partialOpenaiResult = {};
+      let finalCombinedResult = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE messages (lines ending with \n\n)
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6); // Remove 'data: ' prefix
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.type === 'criterion') {
+              // Update partial result with this criterion
+              partialOpenaiResult[data.criterion] = data.result;
+              console.log(`[Stream] ${data.criterion} received:`, data.result?.band);
+
+              // Update state immediately to show this criterion
+              setUnscriptedResults(prev => ({
+                ...prev,
+                openai_result: { ...partialOpenaiResult },
+                // Update combined_result band for this criterion
+                combined_result: {
+                  ...prev.combined_result,
+                  [data.criterion]: data.result?.band
+                }
+              }));
+            } else if (data.type === 'complete') {
+              // Final combined result
+              finalCombinedResult = data.combined_result;
+              setUnscriptedResults(prev => ({
+                ...prev,
+                openai_result: data.openai_result,
+                combined_result: data.combined_result
+              }));
+            } else if (data.type === 'improved_answer') {
+              // Improved answer arrived
+              setUnscriptedResults(prev => ({
+                ...prev,
+                openai_result: {
+                  ...prev.openai_result,
+                  improved_answer: data.result
+                }
+              }));
+            } else if (data.type === 'done') {
+              // Stream complete
+              console.log('[Stream] Complete');
+            } else if (data.type === 'error') {
+              console.error('[Stream] Error:', data.message);
+            }
+          } catch (e) {
+            console.warn('[Stream] Parse error:', e, jsonStr);
+          }
+        }
+      }
+
+      // Mark OpenAI loading as complete
       setUnscriptedResults(prev => ({
         ...prev,
-        openai_result: openaiData.openai_result,
-        combined_result: openaiData.combined_result,
         _loading_openai: false
       }));
 
