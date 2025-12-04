@@ -423,9 +423,16 @@ class AzureSpeechAPI:
                     if result_json.get('NBest') and len(result_json['NBest']) > 0:
                         all_words.extend(result_json['NBest'][0].get('Words', []))
                         pron = result_json['NBest'][0].get('PronunciationAssessment', {})
-                        for key in ['AccuracyScore', 'FluencyScore', 'ProsodyScore', 'PronScore', 'CompletenessScore']:
-                            if pron.get(key) is not None:
-                                scores[key.replace('Score', '').lower()].append(pron[key])
+                        score_mapping = {
+                            'AccuracyScore': 'accuracy',
+                            'FluencyScore': 'fluency',
+                            'ProsodyScore': 'prosody',
+                            'PronScore': 'pronunciation',
+                            'CompletenessScore': 'completeness'
+                        }
+                        for azure_key, score_key in score_mapping.items():
+                            if pron.get(azure_key) is not None:
+                                scores[score_key].append(pron[azure_key])
 
         def on_canceled(evt):
             if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
@@ -471,9 +478,10 @@ class AzureSpeechAPI:
             'duration_sec': total_duration / 10000000 if total_duration else 5
         }
         try:
-            with open(os.path.join(RESULTS_FOLDER, f'azure_{timestamp}.json'), 'w', encoding='utf-8') as f:
-                json.dump(azure_result, f, indent=2, ensure_ascii=False)
-            print(f"[AZURE] Results saved to results/azure_{timestamp}.json")
+            # Lưu raw JSON từ Azure (all_results)
+            with open(os.path.join(RESULTS_FOLDER, f'azure_raw_{timestamp}.json'), 'w', encoding='utf-8') as f:
+                json.dump(all_results, f, indent=2, ensure_ascii=False)
+            print(f"[AZURE] Raw results saved to results/azure_raw_{timestamp}.json")
         except Exception as e:
             print(f"[AZURE] Failed to save results: {e}")
 

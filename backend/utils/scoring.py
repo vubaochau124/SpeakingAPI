@@ -25,8 +25,8 @@ def calculate_azure_score(results):
     accuracy = scores.get('accuracy', 0) or 0
     prosody = scores.get('prosody', 0) or 0
 
-    # Weighted pronunciation: pronunciation 50%, accuracy 30%, prosody 20%
-    pronunciation_raw = pronunciation * 0.5 + accuracy * 0.3 + prosody * 0.2
+    # Dùng PronScore trực tiếp từ Azure
+    pronunciation_raw = pronunciation
 
     print(f"[SCORING] Raw Azure scores - pronunciation: {pronunciation}, fluency: {fluency}, accuracy: {accuracy}, prosody: {prosody}", flush=True)
     print(f"[SCORING] Weighted pronunciation: {pronunciation_raw} -> IELTS band: {azure_score_to_ielts(pronunciation_raw)}", flush=True)
