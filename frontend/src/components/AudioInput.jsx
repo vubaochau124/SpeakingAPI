@@ -1,6 +1,13 @@
 import { useState, useRef } from 'react';
 import QuestionSelector from './QuestionSelector';
 
+const SUPPORTED_LANGUAGES = [
+  { code: 'en-US', label: '🇺🇸 English' },
+  { code: 'zh-CN', label: '🇨🇳 中文' },
+  { code: 'ja-JP', label: '🇯🇵 日本語' },
+  { code: 'ko-KR', label: '🇰🇷 한국어' },
+];
+
 function AudioInput({ onEvaluate, loading, buttonText = 'Get Feedback', questions = [], topics = [] }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState(null);
@@ -9,6 +16,7 @@ function AudioInput({ onEvaluate, loading, buttonText = 'Get Feedback', question
   const [fileName, setFileName] = useState('');
   const [question, setQuestion] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
+  const [language, setLanguage] = useState('en-US');
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -69,13 +77,32 @@ function AudioInput({ onEvaluate, loading, buttonText = 'Get Feedback', question
       return;
     }
 
-    onEvaluate(audioFile, question);
+    onEvaluate(audioFile, question, language);
   };
 
   const hasAudio = recordedBlob || uploadedFile;
 
   return (
     <div className="space-y-6">
+      {/* Language Selector */}
+      <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600">
+        <label className="block text-slate-300 text-sm font-medium mb-2">
+          🌐 Select Language
+        </label>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          disabled={loading}
+          className="w-full bg-slate-800 text-white border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent disabled:opacity-50"
+        >
+          {SUPPORTED_LANGUAGES.map((lang) => (
+            <option key={lang.code} value={lang.code}>
+              {lang.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Question Input */}
       <QuestionSelector
         questions={questions}

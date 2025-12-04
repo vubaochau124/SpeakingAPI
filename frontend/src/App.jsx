@@ -82,7 +82,7 @@ function MainApp() {
     }
   };
 
-  const handleUnscriptedEvaluate = async (audioFile, question = '', questionId = null) => {
+  const handleUnscriptedEvaluate = async (audioFile, question = '', language = 'en-US') => {
     setUnscriptedLoading(true);
     setOpenaiLoading(true);
     setUnscriptedError(null);
@@ -92,11 +92,9 @@ function MainApp() {
 
     const formData = new FormData();
     formData.append('audio', audioFile);
+    formData.append('language', language);
     if (question.trim()) {
       formData.append('question', question.trim());
-    }
-    if (questionId) {
-      formData.append('question_id', questionId);
     }
 
     try {

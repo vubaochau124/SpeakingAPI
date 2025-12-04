@@ -20,6 +20,9 @@ from openai_evaluator import OpenAIEvaluator
 
 router = APIRouter(prefix="/api", tags=["Evaluation"])
 
+# Supported languages for pronunciation assessment
+SUPPORTED_LANGUAGES = ['en-US', 'zh-CN', 'ja-JP', 'ko-KR']
+
 
 @router.get("/health")
 async def health():
@@ -127,10 +130,10 @@ async def convert_audio(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _run_azure_assessment(client, wav_path, transcript):
+def _run_azure_assessment(client, wav_path, transcript, language='en-US'):
     """Run Azure pronunciation assessment (for parallel execution)"""
     # Azure already has internal timing prints
-    return client.assess_pronunciation_only(wav_path, transcript)
+    return client.assess_pronunciation_only(wav_path, transcript, language)
 
 def _run_openai_evaluation(transcript, question):
     """Run OpenAI content evaluation (for parallel execution)"""
@@ -147,6 +150,7 @@ async def evaluate_audio(
     audio: UploadFile = File(...),
     question: Optional[str] = Form(None),
     question_id: Optional[int] = Form(None),
+    language: Optional[str] = Form("en-US"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -155,6 +159,8 @@ async def evaluate_audio(
         raise HTTPException(status_code=400, detail="No file selected")
     if not allowed_file(audio.filename):
         raise HTTPException(status_code=400, detail="Invalid file type. Allowed: wav, mp3, m4a, webm, ogg, aiff")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
     filename = audio.filename.replace(" ", "_")
     filepath = os.path.join(UPLOAD_FOLDER, filename)
@@ -166,7 +172,7 @@ async def evaluate_audio(
         # Step 1: Prepare audio and get transcript (Whisper)
         client = AzureSpeechAPI()
         wav_path, needs_cleanup = client.prepare_audio(filepath)
-        transcript = client.transcribe_only(wav_path)
+        transcript = client.transcribe_only(wav_path, language)
 
         # Step 2: Run Azure and OpenAI in PARALLEL
         azure_result = None
@@ -174,7 +180,7 @@ async def evaluate_audio(
 
         if transcript:
             with ThreadPoolExecutor(max_workers=2) as executor:
-                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript)
+                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language)
                 openai_future = executor.submit(_run_openai_evaluation, transcript, question)
 
                 azure_result = azure_future.result()
@@ -265,6 +271,7 @@ async def evaluate_audio(
 async def evaluate_azure_only(
     audio: UploadFile = File(...),
     question: Optional[str] = Form(None),
+    language: Optional[str] = Form("en-US"),
     current_user: User = Depends(get_current_user)
 ):
     """Fast endpoint - Azure pronunciation assessment only"""
@@ -272,6 +279,8 @@ async def evaluate_azure_only(
         raise HTTPException(status_code=400, detail="No file selected")
     if not allowed_file(audio.filename):
         raise HTTPException(status_code=400, detail="Invalid file type")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
     filename = audio.filename.replace(" ", "_")
     filepath = os.path.join(UPLOAD_FOLDER, filename)
@@ -282,8 +291,8 @@ async def evaluate_azure_only(
 
         client = AzureSpeechAPI()
         wav_path, needs_cleanup = client.prepare_audio(filepath)
-        transcript = client.transcribe_only(wav_path)
-        azure_result = client.assess_pronunciation_only(wav_path, transcript)
+        transcript = client.transcribe_only(wav_path, language)
+        azure_result = client.assess_pronunciation_only(wav_path, transcript, language)
 
         if needs_cleanup and os.path.exists(wav_path):
             try:

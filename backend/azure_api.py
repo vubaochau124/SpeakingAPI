@@ -524,13 +524,12 @@ class AzureSpeechAPI:
             '_raw_azure_response': result['results']
         }
 
-    def score_audio(self, audio_file_path, relevance_context=""):
+    def score_audio(self, audio_file_path, relevance_context="", language='en-US'):
         """Evaluate speech using 2-pass approach: Whisper transcription + Azure pronunciation."""
         if not os.path.exists(audio_file_path):
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
         wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
-        language = 'en-US'
 
         try:
             # Pass 1: Transcription
@@ -577,7 +576,7 @@ class AzureSpeechAPI:
                 except Exception:
                     pass
 
-    def score_text(self, audio_file_path, text):
+    def score_text(self, audio_file_path, text, language='en-US'):
         """Evaluate scripted speech (reading given text)"""
         if not os.path.exists(audio_file_path):
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
@@ -585,7 +584,6 @@ class AzureSpeechAPI:
             raise ValueError("Reference text is required for scripted evaluation")
 
         wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
-        language = 'en-US'
 
         try:
             # For scripted, enable_miscue must be False in continuous mode
