@@ -235,7 +235,7 @@ class OpenAIEvaluator:
             # Save each criterion result to file
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
             try:
-                with open(os.path.join(RESULTS_FOLDER, f'openai_{criterion}_{timestamp}.json'), 'w', encoding='utf-8') as f:
+                with open(os.path.join(RESULTS_FOLDER, f'openai_{criterion}.json'), 'w', encoding='utf-8') as f:
                     json.dump({'criterion': criterion, 'result': result, 'elapsed': elapsed}, f, indent=2, ensure_ascii=False)
             except Exception:
                 pass

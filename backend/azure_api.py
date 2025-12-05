@@ -479,9 +479,9 @@ class AzureSpeechAPI:
         }
         try:
             # Lưu raw JSON từ Azure (all_results)
-            with open(os.path.join(RESULTS_FOLDER, f'azure_raw_{timestamp}.json'), 'w', encoding='utf-8') as f:
+            with open(os.path.join(RESULTS_FOLDER, 'azure_raw.json'), 'w', encoding='utf-8') as f:
                 json.dump(all_results, f, indent=2, ensure_ascii=False)
-            print(f"[AZURE] Raw results saved to results/azure_raw_{timestamp}.json")
+            print(f"[AZURE] Raw results saved to results/azure_raw.json")
         except Exception as e:
             print(f"[AZURE] Failed to save results: {e}")
 
