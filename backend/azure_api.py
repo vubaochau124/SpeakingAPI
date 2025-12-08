@@ -5,6 +5,7 @@ import tempfile
 import time
 import numpy as np
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from openai import OpenAI
 from utils.scoring import azure_score_to_ielts
@@ -172,6 +173,77 @@ class AzureSpeechAPI:
 
         except Exception:
             return self._transcribe_audio_azure(wav_path, language)
+
+    def _transcribe_with_timestamps(self, wav_path, language='en-US'):
+        """Transcribe audio with word-level timestamps using Whisper.
+
+        Returns:
+            dict: {
+                'text': full transcript,
+                'words': [{'word': str, 'start': float, 'end': float}, ...]
+            }
+        """
+        try:
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            if not openai_api_key:
+                # Fallback: return text only without timestamps
+                text = self._transcribe_audio_azure(wav_path, language)
+                return {'text': text, 'words': []}
+
+            start_time = time.time()
+            print(f"[WHISPER-TS] Starting transcription with timestamps...")
+            client = OpenAI(api_key=openai_api_key)
+            whisper_lang = language.split('-')[0] if '-' in language else language
+
+            with open(wav_path, 'rb') as audio_file:
+                response = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language=whisper_lang,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word"]
+                )
+
+            elapsed = time.time() - start_time
+            text = response.text if hasattr(response, 'text') else str(response)
+            words = []
+
+            # Extract word-level timestamps
+            if hasattr(response, 'words') and response.words:
+                for w in response.words:
+                    words.append({
+                        'word': w.word if hasattr(w, 'word') else w.get('word', ''),
+                        'start': w.start if hasattr(w, 'start') else w.get('start', 0),
+                        'end': w.end if hasattr(w, 'end') else w.get('end', 0)
+                    })
+
+            print(f"[WHISPER-TS] Completed in {elapsed:.2f}s. {len(words)} words with timestamps")
+            return {'text': text.strip(), 'words': words}
+
+        except Exception as e:
+            print(f"[WHISPER-TS] Error: {e}, falling back to text-only")
+            text = self._transcribe_audio_azure(wav_path, language)
+            return {'text': text, 'words': []}
+
+    def _find_sentence_boundaries(self, words):
+        """Find sentence ending positions from word list.
+
+        Args:
+            words: List of {'word': str, 'start': float, 'end': float}
+
+        Returns:
+            list: [(end_time_ms, word_index), ...] for each sentence ending
+        """
+        sentence_endings = []
+        sentence_end_chars = '.!?。？！'  # Include Asian punctuation
+
+        for i, word_info in enumerate(words):
+            word = word_info.get('word', '').strip()
+            if word and word[-1] in sentence_end_chars:
+                end_time_ms = int(word_info.get('end', 0) * 1000)
+                sentence_endings.append((end_time_ms, i))
+
+        return sentence_endings
 
     def _transcribe_audio_azure(self, wav_path, language='en-US'):
         """Fallback: Speech-to-Text using Azure."""
@@ -523,6 +595,394 @@ class AzureSpeechAPI:
             },
             '_raw_azure_response': result['results']
         }
+
+    def _split_audio_into_chunks(self, wav_path, chunk_duration_ms=30000, min_silence_len=500, silence_thresh=-40, sentence_boundaries=None):
+        """Split audio into chunks, prioritizing sentence boundaries over silence.
+
+        Priority order for split points:
+        1. Sentence boundaries (from Whisper word timestamps)
+        2. Silence points (from pydub detection)
+        3. Fixed time intervals (fallback)
+
+        Args:
+            wav_path: Path to WAV file
+            chunk_duration_ms: Target chunk duration in milliseconds (default 30s)
+            min_silence_len: Minimum silence length to split on (ms)
+            silence_thresh: Silence threshold in dB
+            sentence_boundaries: List of (end_time_ms, word_index) from _find_sentence_boundaries
+
+        Returns:
+            list: List of (chunk_path, start_ms, end_ms) tuples
+        """
+        if not PYDUB_AVAILABLE:
+            return [(wav_path, 0, None)]  # Return original if pydub not available
+
+        try:
+            from pydub import AudioSegment
+            from pydub.silence import detect_silence
+
+            audio = AudioSegment.from_wav(wav_path)
+            total_duration = len(audio)
+
+            # If audio is short enough, don't split
+            if total_duration <= chunk_duration_ms * 1.5:
+                print(f"[AZURE-CHUNK] Audio is {total_duration/1000:.1f}s, no splitting needed")
+                return [(wav_path, 0, total_duration)]
+
+            print(f"[AZURE-CHUNK] Splitting {total_duration/1000:.1f}s audio into ~{chunk_duration_ms/1000}s chunks")
+
+            # Build list of valid split points
+            split_points = []
+
+            # Priority 1: Sentence boundaries (best quality splits)
+            if sentence_boundaries:
+                for end_time_ms, word_idx in sentence_boundaries:
+                    if end_time_ms > 0:
+                        split_points.append(('sentence', end_time_ms))
+                print(f"[AZURE-CHUNK] Found {len(split_points)} sentence boundaries")
+
+            # Priority 2: Silence points
+            silences = detect_silence(audio, min_silence_len=min_silence_len, silence_thresh=silence_thresh)
+            if silences:
+                for silence_start, silence_end in silences:
+                    silence_mid = (silence_start + silence_end) // 2
+                    # Avoid duplicates near existing split points
+                    is_duplicate = any(abs(silence_mid - sp[1]) < 1000 for sp in split_points)
+                    if not is_duplicate:
+                        split_points.append(('silence', silence_mid))
+                print(f"[AZURE-CHUNK] Found {len(silences)} silence points")
+
+            # Sort all split points by time
+            split_points.sort(key=lambda x: x[1])
+
+            chunks = []
+            current_start = 0
+            chunk_index = 0
+
+            while current_start < total_duration:
+                # Target end point
+                target_end = min(current_start + chunk_duration_ms, total_duration)
+
+                # If this is the last chunk or we're near the end, just take the rest
+                if total_duration - target_end < chunk_duration_ms * 0.3:
+                    target_end = total_duration
+                    best_split = target_end
+                    split_type = 'end'
+                else:
+                    # Find best split point near target_end (within ±7 seconds)
+                    # Prefer sentence boundaries over silence
+                    search_start = max(current_start + chunk_duration_ms * 0.5, target_end - 7000)
+                    search_end = min(target_end + 7000, total_duration)
+
+                    best_split = target_end
+                    split_type = 'time'
+
+                    # Look for sentence boundaries first
+                    for sp_type, sp_time in split_points:
+                        if search_start <= sp_time <= search_end and sp_time > current_start:
+                            if sp_type == 'sentence':
+                                best_split = sp_time
+                                split_type = 'sentence'
+                                break  # Sentence boundary found, use it
+                            elif split_type != 'sentence':
+                                # Use silence if no sentence boundary yet
+                                best_split = sp_time
+                                split_type = 'silence'
+
+                # Extract chunk
+                chunk_audio = audio[current_start:best_split]
+                chunk_path = tempfile.mktemp(suffix=f'_chunk{chunk_index}.wav')
+                chunk_audio.export(chunk_path, format='wav')
+
+                chunks.append((chunk_path, current_start, best_split))
+                print(f"[AZURE-CHUNK] Chunk {chunk_index}: {current_start/1000:.1f}s - {best_split/1000:.1f}s ({(best_split-current_start)/1000:.1f}s) [{split_type}]")
+
+                current_start = best_split
+                chunk_index += 1
+
+                if current_start >= total_duration:
+                    break
+
+            print(f"[AZURE-CHUNK] Created {len(chunks)} chunks")
+            return chunks
+
+        except Exception as e:
+            print(f"[AZURE-CHUNK] Error splitting audio: {e}, using original file")
+            return [(wav_path, 0, None)]
+
+    def _assess_single_chunk(self, chunk_info, transcript_words, language, chunk_index):
+        """Assess a single audio chunk.
+
+        Args:
+            chunk_info: Tuple of (chunk_path, start_ms, end_ms)
+            transcript_words: List of words expected in this chunk (approximate)
+            language: Language code
+            chunk_index: Index of this chunk for logging
+
+        Returns:
+            dict: Assessment result for this chunk
+        """
+        chunk_path, start_ms, end_ms = chunk_info
+        chunk_transcript = ' '.join(transcript_words) if transcript_words else ""
+
+        start_time = time.time()
+        print(f"[AZURE-CHUNK {chunk_index}] Starting assessment for chunk {start_ms/1000:.1f}s-{end_ms/1000:.1f}s...")
+
+        try:
+            result = self._run_continuous_assessment(chunk_path, chunk_transcript, language)
+            elapsed = time.time() - start_time
+            print(f"[AZURE-CHUNK {chunk_index}] Completed in {elapsed:.2f}s, {len(result['words'])} words")
+
+            # Add offset to word timings
+            for word in result['words']:
+                if 'Offset' in word:
+                    word['Offset'] += int(start_ms * 10000)  # Convert ms to 100ns units
+
+            return {
+                'chunk_index': chunk_index,
+                'start_ms': start_ms,
+                'end_ms': end_ms,
+                'result': result,
+                'elapsed': elapsed
+            }
+        except Exception as e:
+            print(f"[AZURE-CHUNK {chunk_index}] Error: {e}")
+            return {
+                'chunk_index': chunk_index,
+                'start_ms': start_ms,
+                'end_ms': end_ms,
+                'result': None,
+                'error': str(e)
+            }
+
+    def _merge_chunk_results(self, chunk_results):
+        """Merge results from multiple chunks into a single result.
+
+        Scoring is weighted by word count per chunk for accuracy.
+
+        Args:
+            chunk_results: List of chunk assessment results
+
+        Returns:
+            dict: Merged result matching _run_continuous_assessment format
+        """
+        # Sort by chunk index
+        chunk_results = sorted(chunk_results, key=lambda x: x['chunk_index'])
+
+        all_words = []
+        all_results = []
+        all_transcripts = []
+        total_duration = 0
+
+        # Weighted scores
+        weighted_scores = {
+            'accuracy': 0, 'fluency': 0, 'prosody': 0, 'pronunciation': 0
+        }
+        total_word_count = 0
+
+        for chunk in chunk_results:
+            if chunk.get('result') is None:
+                continue
+
+            result = chunk['result']
+            words = result.get('words', [])
+            word_count = len(words)
+
+            if word_count == 0:
+                continue
+
+            all_words.extend(words)
+            all_results.extend(result.get('results', []))
+            all_transcripts.append(result.get('transcript', ''))
+            total_duration += result.get('duration_sec', 0)
+
+            # Weight scores by word count
+            scores = result.get('scores', {})
+            for key in weighted_scores:
+                if scores.get(key) is not None:
+                    weighted_scores[key] += scores[key] * word_count
+
+            total_word_count += word_count
+
+        # Calculate weighted averages
+        final_scores = {}
+        for key in weighted_scores:
+            if total_word_count > 0:
+                final_scores[key] = round(weighted_scores[key] / total_word_count, 1)
+            else:
+                final_scores[key] = 0
+        final_scores['completeness'] = None
+
+        print(f"[AZURE-CHUNK] Merged {len(chunk_results)} chunks: {total_word_count} total words, scores: {final_scores}")
+
+        return {
+            'timestamp': datetime.now().strftime('%Y%m%d_%H%M%S'),
+            'transcript': ' '.join(all_transcripts),
+            'words': all_words,
+            'results': all_results,
+            'scores': final_scores,
+            'duration_sec': total_duration
+        }
+
+    def assess_pronunciation_chunked(self, wav_path, transcript, language='en-US', max_workers=4):
+        """Run pronunciation assessment with parallel chunk processing for long audio.
+
+        This method splits long audio into chunks and processes them in parallel,
+        significantly reducing processing time for audio > 30 seconds.
+
+        NEW: Uses Whisper word-level timestamps to find sentence boundaries,
+        ensuring chunks are split at natural sentence endings instead of mid-sentence.
+
+        Args:
+            wav_path: Path to WAV file
+            transcript: Full transcript text (can be empty, will use Whisper)
+            language: Language code
+            max_workers: Maximum parallel workers
+
+        Returns:
+            dict: Same format as assess_pronunciation_only
+        """
+        start_time = time.time()
+        print(f"[AZURE-CHUNKED] Starting chunked pronunciation assessment...")
+
+        # Step 1: Get word-level timestamps for sentence boundary detection
+        whisper_result = self._transcribe_with_timestamps(wav_path, language)
+        word_timestamps = whisper_result.get('words', [])
+        whisper_transcript = whisper_result.get('text', '')
+
+        # Use Whisper transcript if none provided
+        if not transcript and whisper_transcript:
+            transcript = whisper_transcript
+            print(f"[AZURE-CHUNKED] Using Whisper transcript: {transcript[:80]}...")
+
+        # Step 2: Find sentence boundaries from word timestamps
+        sentence_boundaries = self._find_sentence_boundaries(word_timestamps) if word_timestamps else None
+        if sentence_boundaries:
+            print(f"[AZURE-CHUNKED] Found {len(sentence_boundaries)} sentence boundaries for smart chunking")
+
+        # Step 3: Split audio using sentence boundaries
+        chunks = self._split_audio_into_chunks(wav_path, sentence_boundaries=sentence_boundaries)
+
+        # If only one chunk, use regular assessment
+        if len(chunks) == 1 and chunks[0][0] == wav_path:
+            print(f"[AZURE-CHUNKED] Single chunk, using regular assessment")
+            return self.assess_pronunciation_only(wav_path, transcript, language)
+
+        # Step 4: Split transcript into chunks using word timestamps (more accurate)
+        chunk_word_lists = []
+
+        if word_timestamps and len(chunks) > 1:
+            # Use word timestamps to accurately assign words to chunks
+            for chunk_path, start_ms, end_ms in chunks:
+                chunk_words = []
+                for w in word_timestamps:
+                    word_start_ms = int(w.get('start', 0) * 1000)
+                    word_end_ms = int(w.get('end', 0) * 1000)
+                    # Word belongs to this chunk if its center is within chunk bounds
+                    word_center = (word_start_ms + word_end_ms) / 2
+                    if start_ms <= word_center < end_ms:
+                        chunk_words.append(w.get('word', '').strip())
+                chunk_word_lists.append(chunk_words)
+            print(f"[AZURE-CHUNKED] Split transcript by timestamps: {[len(cw) for cw in chunk_word_lists]} words per chunk")
+        else:
+            # Fallback: Split transcript by duration ratio
+            words = transcript.split()
+            total_words = len(words)
+
+            if total_words > 0 and len(chunks) > 1:
+                total_duration = sum(c[2] - c[1] for c in chunks if c[2] is not None)
+                if total_duration > 0:
+                    for chunk_path, start_ms, end_ms in chunks:
+                        chunk_duration = (end_ms - start_ms) if end_ms else 30000
+                        word_ratio = chunk_duration / total_duration
+                        word_count = max(1, int(total_words * word_ratio))
+                        chunk_word_lists.append(words[:word_count])
+                        words = words[word_count:]
+                    if words and chunk_word_lists:
+                        chunk_word_lists[-1].extend(words)
+                else:
+                    words_per_chunk = max(1, total_words // len(chunks))
+                    for i in range(len(chunks)):
+                        start_idx = i * words_per_chunk
+                        end_idx = start_idx + words_per_chunk if i < len(chunks) - 1 else total_words
+                        chunk_word_lists.append(words[start_idx:end_idx])
+            else:
+                chunk_word_lists = [[]] * len(chunks)
+
+        # Process chunks in parallel
+        chunk_results = []
+        temp_files = []
+
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {}
+                for i, (chunk_info, word_list) in enumerate(zip(chunks, chunk_word_lists)):
+                    if chunk_info[0] != wav_path:  # Track temp files for cleanup
+                        temp_files.append(chunk_info[0])
+                    future = executor.submit(
+                        self._assess_single_chunk,
+                        chunk_info,
+                        word_list,
+                        language,
+                        i
+                    )
+                    futures[future] = i
+
+                for future in as_completed(futures):
+                    result = future.result()
+                    chunk_results.append(result)
+
+            # Merge results
+            merged_result = self._merge_chunk_results(chunk_results)
+
+            elapsed = time.time() - start_time
+            print(f"[AZURE-CHUNKED] Total time: {elapsed:.2f}s for {len(chunks)} chunks")
+
+            # Calculate fluency metrics
+            fluency_metrics = self._calculate_fluency_metrics(
+                merged_result['words'],
+                merged_result['duration_sec']
+            )
+
+            # Save merged results
+            try:
+                with open(os.path.join(RESULTS_FOLDER, 'azure_raw.json'), 'w', encoding='utf-8') as f:
+                    json.dump(merged_result['results'], f, indent=2, ensure_ascii=False)
+                print(f"[AZURE-CHUNKED] Raw results saved to results/azure_raw.json")
+            except Exception as e:
+                print(f"[AZURE-CHUNKED] Failed to save results: {e}")
+
+            return {
+                'status': 'success',
+                'speech_score': {
+                    'transcript': merged_result['transcript'] or transcript,
+                    'word_score_list': merged_result['words'],
+                    'scores': {
+                        'pronunciation': merged_result['scores']['pronunciation'],
+                        'fluency': merged_result['scores']['fluency'],
+                        'accuracy': merged_result['scores']['accuracy'],
+                        'prosody': merged_result['scores']['prosody'],
+                        'grammar': None,
+                        'vocab': None,
+                        'coherence': None
+                    },
+                    'fluency': fluency_metrics,
+                    'detected_dialect': {'lang_id': language}
+                },
+                '_raw_azure_response': merged_result['results'],
+                '_chunked': True,
+                '_chunk_count': len(chunks),
+                '_total_time': elapsed
+            }
+
+        finally:
+            # Cleanup temp chunk files
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception:
+                    pass
 
     def score_audio(self, audio_file_path, relevance_context="", language='en-US'):
         """Evaluate speech using 2-pass approach: Whisper transcription + Azure pronunciation."""

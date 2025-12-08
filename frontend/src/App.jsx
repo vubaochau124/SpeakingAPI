@@ -53,6 +53,7 @@ function MainApp() {
   const [unscriptedError, setUnscriptedError] = useState(null);
   const [hasQuestion, setHasQuestion] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
+  const [processingStep, setProcessingStep] = useState(''); // Track current processing step
 
   const handleConversationFinish = async (audioFile, texts, options = {}) => {
     setConversationLoading(true);
@@ -83,12 +84,23 @@ function MainApp() {
   };
 
   const handleUnscriptedEvaluate = async (audioFile, question = '', language = 'en-US') => {
+    // Start timing from button click
+    const startTime = performance.now();
+    const logTime = (label) => {
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      console.log(`[TIMING] ${elapsed}s - ${label}`);
+      return elapsed;
+    };
+
+    logTime('🚀 Button clicked - Starting evaluation');
+
     setUnscriptedLoading(true);
     setOpenaiLoading(true);
     setUnscriptedError(null);
     setUnscriptedResults(null);
     setHasQuestion(!!question.trim());
     setCurrentQuestion(question.trim());
+    setProcessingStep('Uploading audio...');
 
     const formData = new FormData();
     formData.append('audio', audioFile);
@@ -98,55 +110,23 @@ function MainApp() {
     }
 
     try {
-      // STEP 1: Call Azure endpoint (fast) - get transcript and audio immediately
-      const azureResponse = await axios.post('/api/evaluate-azure', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          ...getAuthHeaders()
-        },
-      });
+      // Use new unified streaming endpoint for faster progressive results
+      setProcessingStep('Connecting...');
+      logTime('📤 Sending request to /api/evaluate-stream');
 
-      const azureData = azureResponse.data;
-
-      // Show Azure results immediately (audio, transcript, pronunciation/fluency bands)
-      setUnscriptedResults({
-        audio_data: azureData.audio_data,
-        speech_score: azureData.speech_score,
-        transcript: azureData.transcript,
-        azure_scores: azureData.azure_scores,
-        // Partial combined_result with just Azure bands
-        combined_result: {
-          pronunciation: azureData.azure_scores?.pronunciation_band,
-          fluency: azureData.azure_scores?.fluency_band,
-        },
-        openai_result: null,  // Will be filled later
-        _loading_openai: true  // Flag to show loading for detailed feedback
-      });
-
-      // Azure is done, stop main loading
-      setUnscriptedLoading(false);
-
-      // STEP 2: Stream OpenAI results using SSE for progressive display
-      const openaiFormData = new FormData();
-      openaiFormData.append('transcript', azureData.transcript || '');
-      if (question.trim()) {
-        openaiFormData.append('question', question.trim());
-      }
-      openaiFormData.append('pronunciation_band', azureData.azure_scores?.pronunciation_band || 5.0);
-      openaiFormData.append('fluency_band', azureData.azure_scores?.fluency_band || 5.0);
-
-      // Use fetch with SSE streaming for progressive feedback display
       const authToken = localStorage.getItem('token');
-      const response = await fetch('/api/evaluate-openai-stream', {
+      const response = await fetch('/api/evaluate-stream', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`
         },
-        body: openaiFormData
+        body: formData
       });
 
+      logTime('📡 Connection established, starting stream');
+
       if (!response.ok) {
-        throw new Error(`OpenAI evaluation failed: ${response.statusText}`);
+        throw new Error(`Evaluation failed: ${response.statusText}`);
       }
 
       // Read the SSE stream
@@ -154,11 +134,14 @@ function MainApp() {
       const decoder = new TextDecoder();
       let buffer = '';
       let partialOpenaiResult = {};
-      let finalCombinedResult = null;
+      let currentAzureScores = { pronunciation_band: 5.0, fluency_band: 5.0 };
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          logTime('✅ Stream complete');
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -172,44 +155,92 @@ function MainApp() {
 
           try {
             const data = JSON.parse(jsonStr);
+            logTime(`📥 ${data.type} (server: ${data.elapsed}s)`);
 
-            if (data.type === 'criterion') {
-              // Update partial result with this criterion
+            if (data.type === 'audio_received') {
+              // Audio received - show preview immediately
+              setProcessingStep('Transcribing speech...');
+              setUnscriptedResults(prev => ({
+                ...prev,
+                audio_data: data.audio_data,
+                _loading_openai: true
+              }));
+            } else if (data.type === 'transcription_complete') {
+              // Transcript ready - show it
+              setProcessingStep('Analyzing pronunciation...');
+              setUnscriptedResults(prev => ({
+                ...prev,
+                speech_score: { transcript: data.transcript },
+                transcript: data.transcript
+              }));
+              // Main loading done - transcript visible
+              setUnscriptedLoading(false);
+            } else if (data.type === 'azure_complete') {
+              // Azure pronunciation/fluency scores ready
+              setProcessingStep('Evaluating content...');
+              currentAzureScores = data.azure_scores;
+              setUnscriptedResults(prev => ({
+                ...prev,
+                speech_score: {
+                  ...prev?.speech_score,
+                  ...data.azure_result?.speech_score,
+                  word_score_list: data.azure_result?.speech_score?.word_score_list
+                },
+                azure_scores: data.azure_scores,
+                combined_result: {
+                  ...prev?.combined_result,
+                  pronunciation: data.azure_scores?.pronunciation_band,
+                  fluency: data.azure_scores?.fluency_band
+                }
+              }));
+            } else if (data.type === 'criterion') {
+              // OpenAI criterion completed - update progressively
+              const criterionNames = {
+                'coherence': 'Coherence',
+                'lexical_resource': 'Vocabulary',
+                'grammar': 'Grammar',
+                'topic_relevance': 'Relevance'
+              };
+              setProcessingStep(`Evaluated: ${criterionNames[data.criterion] || data.criterion}`);
               partialOpenaiResult[data.criterion] = data.result;
-              console.log(`[Stream] ${data.criterion} received:`, data.result?.band);
-
-              // Update state immediately to show this criterion
               setUnscriptedResults(prev => ({
                 ...prev,
                 openai_result: { ...partialOpenaiResult },
-                // Update combined_result band for this criterion
                 combined_result: {
-                  ...prev.combined_result,
+                  ...prev?.combined_result,
                   [data.criterion]: data.result?.band
                 }
               }));
             } else if (data.type === 'complete') {
-              // Final combined result
-              finalCombinedResult = data.combined_result;
+              // All evaluations complete
+              setProcessingStep('Generating suggestions...');
               setUnscriptedResults(prev => ({
                 ...prev,
                 openai_result: data.openai_result,
                 combined_result: data.combined_result
               }));
             } else if (data.type === 'improved_answer') {
-              // Improved answer arrived
+              // Improved answer arrived (background)
+              setProcessingStep('');
               setUnscriptedResults(prev => ({
                 ...prev,
                 openai_result: {
-                  ...prev.openai_result,
+                  ...prev?.openai_result,
                   improved_answer: data.result
                 }
               }));
             } else if (data.type === 'done') {
               // Stream complete
               console.log('[Stream] Complete');
+              setProcessingStep('');
+              setUnscriptedResults(prev => ({
+                ...prev,
+                _loading_openai: false
+              }));
             } else if (data.type === 'error') {
               console.error('[Stream] Error:', data.message);
+              setProcessingStep('');
+              setUnscriptedError(data.message);
             }
           } catch (e) {
             console.warn('[Stream] Parse error:', e, jsonStr);
@@ -217,7 +248,7 @@ function MainApp() {
         }
       }
 
-      // Mark OpenAI loading as complete
+      // Mark loading complete
       setUnscriptedResults(prev => ({
         ...prev,
         _loading_openai: false
@@ -244,6 +275,7 @@ function MainApp() {
     setOpenaiLoading(false);
     setCurrentQuestion('');
     setHasQuestion(false);
+    setProcessingStep('');
   };
 
   return (
@@ -462,7 +494,12 @@ function MainApp() {
             {unscriptedLoading && (
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-                <p className="mt-4 text-slate-300">Analyzing your speech...</p>
+                <p className="mt-4 text-slate-300">{processingStep || 'Analyzing your speech...'}</p>
+                <div className="mt-3 flex justify-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
               </div>
             )}
           </div>
