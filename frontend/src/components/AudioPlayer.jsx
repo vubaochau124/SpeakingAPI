@@ -16,11 +16,34 @@ function AudioPlayer({ audioData }) {
     if (!audio) return;
 
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
+      if (audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      } else {
+        // WebM workaround: seek to end to get duration
+        audio.currentTime = 1e10;
+      }
+    };
+
+    const handleDurationChange = () => {
+      if (audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
+
+    const handleSeeked = () => {
+      // After seeking to end, duration should be available
+      if (audio.duration && isFinite(audio.duration) && duration === 0) {
+        setDuration(audio.duration);
+        audio.currentTime = 0; // Reset to beginning
+      }
     };
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
+      // Fallback: get duration during playback
+      if (audio.duration && isFinite(audio.duration) && duration === 0) {
+        setDuration(audio.duration);
+      }
     };
 
     const handleEnded = () => {
@@ -29,15 +52,19 @@ function AudioPlayer({ audioData }) {
     };
 
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("durationchange", handleDurationChange);
+    audio.addEventListener("seeked", handleSeeked);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
 
     return () => {
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("durationchange", handleDurationChange);
+      audio.removeEventListener("seeked", handleSeeked);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
     };
-  }, [audioData]);
+  }, [audioData, duration]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -54,7 +81,7 @@ function AudioPlayer({ audioData }) {
   const handleProgressClick = (e) => {
     const audio = audioRef.current;
     const progressBar = progressRef.current;
-    if (!audio || !progressBar) return;
+    if (!audio || !progressBar || !duration || !isFinite(duration)) return;
 
     const rect = progressBar.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
@@ -85,14 +112,12 @@ function AudioPlayer({ audioData }) {
   const skipTime = (seconds) => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.currentTime = Math.max(
-      0,
-      Math.min(audio.currentTime + seconds, duration)
-    );
+    const maxTime = duration && isFinite(duration) ? duration : audio.duration || 0;
+    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, maxTime));
   };
 
   const formatTime = (time) => {
-    if (!time || isNaN(time)) return "0:00";
+    if (!time || isNaN(time) || !isFinite(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import QuestionSelector from './QuestionSelector';
 
 const SUPPORTED_LANGUAGES = [
@@ -8,18 +8,8 @@ const SUPPORTED_LANGUAGES = [
   { code: 'ko-KR', label: '🇰🇷 한국어' },
 ];
 
-// Real-time streaming configuration
-const REALTIME_CONFIG = {
-  SILENCE_THRESHOLD: -45,      // dB threshold for silence detection
-  SILENCE_DURATION: 800,       // ms of silence before sending chunk
-  MAX_CHUNK_DURATION: 30000,   // Force chunk after 30s even without silence
-  MIN_CHUNK_DURATION: 3000,    // Minimum chunk duration (3s)
-  AUDIO_SAMPLE_RATE: 16000,
-};
-
 function AudioInput({
   onEvaluate,
-  onRealtimeResult,  // Callback for real-time results
   loading,
   buttonText = 'Get Feedback',
   questions = [],
@@ -33,36 +23,19 @@ function AudioInput({
   const [question, setQuestion] = useState('');
   const [audioUrl, setAudioUrl] = useState(null);
   const [language, setLanguage] = useState('en-US');
-
-  // Real-time streaming state
-  const [isConnected, setIsConnected] = useState(false);
-  const [chunkCount, setChunkCount] = useState(0);
-  const [realtimeTranscript, setRealtimeTranscript] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
-  const [processingChunk, setProcessingChunk] = useState(false);
 
   // Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
-
-  // Real-time refs
-  const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
-  const silenceStartRef = useRef(null);
-  const chunkStartTimeRef = useRef(0);
-  const pendingChunkRef = useRef([]);
   const animationFrameRef = useRef(null);
-  const lastChunkEndRef = useRef(0);
-  const recordingStartTimeRef = useRef(0);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
@@ -72,141 +45,13 @@ function AudioInput({
     };
   }, []);
 
-  // Connect to WebSocket for real-time streaming
-  const connectWebSocket = useCallback(() => {
-    return new Promise((resolve, reject) => {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/evaluate-realtime`;
-
-      console.log('[RT] Connecting to WebSocket:', wsUrl);
-      const ws = new WebSocket(wsUrl);
-
-      const timeout = setTimeout(() => {
-        ws.close();
-        reject(new Error('WebSocket connection timeout'));
-      }, 10000);
-
-      ws.onopen = () => {
-        console.log('[RT] WebSocket connected');
-        clearTimeout(timeout);
-        setIsConnected(true);
-        // Initialize session
-        ws.send(JSON.stringify({
-          type: 'init',
-          language: language,
-          question: question
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('[RT] Received:', data.type, data);
-
-        if (data.type === 'init_ok') {
-          resolve(ws);
-        } else if (data.type === 'chunk_received') {
-          setProcessingChunk(true);
-        } else if (data.type === 'chunk_result') {
-          setProcessingChunk(false);
-          // Update transcript progressively
-          if (data.transcript) {
-            setRealtimeTranscript(prev => {
-              const newTranscript = prev ? prev + ' ' + data.transcript : data.transcript;
-              return newTranscript.trim();
-            });
-          }
-          if (onRealtimeResult) {
-            onRealtimeResult({
-              type: 'chunk',
-              index: data.index,
-              transcript: data.transcript,
-              scores: data.scores
-            });
-          }
-        } else if (data.type === 'final') {
-          setIsConnected(false);
-          setRecordStatus('Evaluation complete!');
-          // Final result
-          if (onRealtimeResult) {
-            onRealtimeResult({
-              type: 'final',
-              ...data
-            });
-          }
-        } else if (data.type === 'error') {
-          console.error('[RT] Error:', data.message);
-          setIsConnected(false);
-          reject(new Error(data.message));
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('[RT] WebSocket error:', error);
-        clearTimeout(timeout);
-        setIsConnected(false);
-        reject(error);
-      };
-
-      ws.onclose = () => {
-        console.log('[RT] WebSocket closed');
-        setIsConnected(false);
-      };
-
-      wsRef.current = ws;
-    });
-  }, [language, question, onRealtimeResult]);
-
-  // Send audio chunk to server
-  const sendChunk = useCallback(async (audioBlob, startMs, endMs) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('[RT] WebSocket not ready, skipping chunk');
-      return;
-    }
-
-    // Convert blob to base64
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      wsRef.current.send(JSON.stringify({
-        type: 'chunk',
-        audio: base64,
-        start_ms: startMs,
-        end_ms: endMs
-      }));
-      console.log(`[RT] Sent chunk: ${startMs}ms - ${endMs}ms (${audioBlob.size} bytes)`);
-    };
-    reader.readAsDataURL(audioBlob);
-  }, []);
-
-  // Send current chunk
-  const sendCurrentChunk = useCallback((reason) => {
-    if (pendingChunkRef.current.length === 0) return;
-
-    const audioBlob = new Blob(pendingChunkRef.current, { type: 'audio/webm' });
-    const now = Date.now();
-    const endMs = now - recordingStartTimeRef.current;
-    const startMs = lastChunkEndRef.current;
-
-    console.log(`[RT] Creating chunk (${reason}): ${startMs}ms - ${endMs}ms`);
-
-    sendChunk(audioBlob, startMs, endMs);
-    setChunkCount(prev => prev + 1);
-
-    // Reset for next chunk
-    pendingChunkRef.current = [];
-    lastChunkEndRef.current = endMs;
-    chunkStartTimeRef.current = now;
-    silenceStartRef.current = null;
-  }, [sendChunk]);
-
-  // Analyze audio level for silence detection
-  const analyzeAudioLevel = useCallback(() => {
-    if (!analyserRef.current || !isRecording) return;
+  // Audio level visualizer only (no chunking logic)
+  const analyzeAudioLevel = () => {
+    if (!analyserRef.current) return;
 
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
 
-    // Calculate RMS level
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) {
       sum += dataArray[i] * dataArray[i];
@@ -214,69 +59,26 @@ function AudioInput({
     const rms = Math.sqrt(sum / dataArray.length);
     const db = 20 * Math.log10(rms / 255);
 
-    setAudioLevel(Math.max(0, (db + 60) / 60 * 100)); // Normalize to 0-100
-
-    const now = Date.now();
-    const chunkDuration = now - chunkStartTimeRef.current;
-
-    // Check if we should send chunk
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      const isSilent = db < REALTIME_CONFIG.SILENCE_THRESHOLD;
-
-      if (isSilent) {
-        if (!silenceStartRef.current) {
-          silenceStartRef.current = now;
-        } else {
-          const silenceDuration = now - silenceStartRef.current;
-
-          // Send chunk if silence detected AND minimum duration met
-          if (silenceDuration >= REALTIME_CONFIG.SILENCE_DURATION &&
-              chunkDuration >= REALTIME_CONFIG.MIN_CHUNK_DURATION &&
-              pendingChunkRef.current.length > 0) {
-            sendCurrentChunk('silence');
-          }
-        }
-      } else {
-        silenceStartRef.current = null;
-      }
-
-      // Force send if max duration exceeded
-      if (chunkDuration >= REALTIME_CONFIG.MAX_CHUNK_DURATION &&
-          pendingChunkRef.current.length > 0) {
-        sendCurrentChunk('time');
-      }
-    }
+    setAudioLevel(Math.max(0, (db + 60) / 60 * 100));
 
     animationFrameRef.current = requestAnimationFrame(analyzeAudioLevel);
-  }, [isRecording, sendCurrentChunk]);
+  };
 
-  // Start recording with real-time streaming
+  // Simple recording - no WebSocket
   const startRecording = async () => {
     try {
-      // Reset state
-      setRealtimeTranscript('');
-      setChunkCount(0);
-      setRecordStatus('Connecting...');
-
-      // Connect to WebSocket first
-      try {
-        await connectWebSocket();
-      } catch (err) {
-        console.error('[RT] Failed to connect WebSocket:', err);
-        setRecordStatus('Connection failed. Recording offline...');
-        // Continue with offline recording
-      }
+      setRecordStatus('Starting...');
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: REALTIME_CONFIG.AUDIO_SAMPLE_RATE
+          sampleRate: 16000
         }
       });
       streamRef.current = stream;
 
-      // Setup audio analysis for silence detection
+      // Setup audio analysis for visualizer
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
@@ -288,20 +90,14 @@ function AudioInput({
         mimeType: 'audio/webm;codecs=opus'
       });
       audioChunksRef.current = [];
-      pendingChunkRef.current = [];
-      recordingStartTimeRef.current = Date.now();
-      chunkStartTimeRef.current = Date.now();
-      lastChunkEndRef.current = 0;
-      silenceStartRef.current = null;
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
-          pendingChunkRef.current.push(event.data);
         }
       };
 
-      mediaRecorderRef.current.onstop = async () => {
+      mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setRecordedBlob(audioBlob);
         setUploadedFile(null);
@@ -310,27 +106,17 @@ function AudioInput({
         setAudioUrl(URL.createObjectURL(audioBlob));
 
         stream.getTracks().forEach(track => track.stop());
+        setRecordStatus('Sending for evaluation...');
 
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          // Send any remaining audio
-          if (pendingChunkRef.current.length > 0) {
-            sendCurrentChunk('end');
-          }
-
-          // Request final result
-          setRecordStatus('Processing final results...');
-          wsRef.current.send(JSON.stringify({ type: 'finish' }));
-        } else {
-          setRecordStatus('Recording complete');
-        }
+        // Auto submit - same as upload file
+        const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+        onEvaluate(audioFile, question, language);
       };
 
-      // Start recording with timeslice for real-time chunks (500ms intervals)
       mediaRecorderRef.current.start(500);
       setIsRecording(true);
-      setRecordStatus(isConnected ? '🔴 Recording (real-time)...' : '🔴 Recording...');
+      setRecordStatus('🔴 Recording...');
 
-      // Start audio analysis
       analyzeAudioLevel();
 
     } catch (err) {
@@ -364,7 +150,6 @@ function AudioInput({
       setFileName(file.name);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       setAudioUrl(URL.createObjectURL(file));
-      setRealtimeTranscript('');
     }
   };
 
@@ -433,17 +218,12 @@ function AudioInput({
 
           {/* Audio Level Indicator */}
           {isRecording && (
-            <div className="mb-3 space-y-2">
+            <div className="mb-3">
               <div className="h-2 bg-slate-600 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-75"
                   style={{ width: `${audioLevel}%` }}
                 />
-              </div>
-              <div className="flex justify-between text-xs text-slate-400">
-                <span>Chunks: {chunkCount}</span>
-                {processingChunk && <span className="text-cyan-400 animate-pulse">Processing...</span>}
-                {isConnected && <span className="text-green-400">⚡ Live</span>}
               </div>
             </div>
           )}
@@ -465,13 +245,6 @@ function AudioInput({
               recordStatus.includes('complete') ? 'text-emerald-400' : 'text-slate-400'
             }`}>
               {recordStatus}
-            </p>
-          )}
-
-          {/* Real-time info */}
-          {!isRecording && (
-            <p className="mt-2 text-xs text-slate-500">
-              ⚡ Real-time evaluation: Get instant feedback while speaking
             </p>
           )}
         </div>
@@ -501,17 +274,6 @@ function AudioInput({
           )}
         </div>
       </div>
-
-      {/* Real-time Transcript Preview */}
-      {realtimeTranscript && (
-        <div className="bg-slate-700/30 rounded-xl p-4 border border-cyan-500/50">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-cyan-400 text-sm font-medium">⚡ Live Transcript</span>
-            {isRecording && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
-          </div>
-          <p className="text-white text-sm leading-relaxed">{realtimeTranscript}</p>
-        </div>
-      )}
 
       {/* Audio Preview */}
       {audioUrl && !isRecording && (
