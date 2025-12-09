@@ -1,38 +1,22 @@
 import os
+import re
 import json
 import threading
 import tempfile
 import time
-import numpy as np
+import shutil
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from openai import OpenAI
 from utils.scoring import azure_score_to_ielts
+from utils.audio import convert_to_wav, PYDUB_AVAILABLE
 
 # Results folder for debugging
 RESULTS_FOLDER = os.path.join(os.path.dirname(__file__), 'results')
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
 load_dotenv()
-
-# Try to import audio enhancement libraries
-try:
-    import noisereduce as nr
-    from scipy.signal import butter, filtfilt
-    from scipy.io import wavfile
-    ENHANCEMENT_AVAILABLE = True
-except ImportError:
-    ENHANCEMENT_AVAILABLE = False
-    print("Warning: Audio enhancement libraries not installed. Install with: pip install noisereduce scipy numpy")
-
-# Try to import pydub for audio conversion
-try:
-    from pydub import AudioSegment
-    PYDUB_AVAILABLE = True
-except ImportError:
-    PYDUB_AVAILABLE = False
-    print("Warning: pydub not installed. Audio conversion unavailable. Install with: pip install pydub")
 
 # Try to import eng_to_ipa for phoneme generation fallback
 try:
@@ -77,102 +61,58 @@ class AzureSpeechAPI:
             region=self.service_region
         )
 
-    def _convert_to_wav(self, audio_file_path):
-        """Convert audio to WAV format (16kHz mono 16-bit) and apply enhancement."""
-        import shutil
-        ext = os.path.splitext(audio_file_path)[1].lower()
+    def _map_display_to_words(self, display_text, words):
+        """Map Display text (with casing/punctuation) back to Words array.
 
-        # Copy WAV to temp file for enhancement
-        if ext == '.wav':
-            wav_path = tempfile.mktemp(suffix='.wav')
-            shutil.copy2(audio_file_path, wav_path)
-            return self._enhance_audio(wav_path), True
+        Azure returns Words in lowercase without punctuation, but Display has proper formatting.
+        This method maps Display words to the Words array to preserve casing and punctuation.
 
-        if not PYDUB_AVAILABLE:
-            return audio_file_path, False
+        Args:
+            display_text: The Display text with proper casing and punctuation
+            words: List of word dicts from Azure with lowercase 'Word' field
 
-        try:
-            audio = AudioSegment.from_file(audio_file_path, format=ext.lstrip('.') if ext else None)
-            audio = audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)
-            wav_path = tempfile.mktemp(suffix='.wav')
-            audio.export(wav_path, format='wav')
-            return self._enhance_audio(wav_path), True
-        except Exception:
-            return audio_file_path, False
+        Returns:
+            list: Updated words list with 'Word' field having proper casing/punctuation
+        """
+        # Split display text into tokens, keeping punctuation attached to words
+        # Match word characters followed by optional punctuation
+        display_tokens = re.findall(r"[\w']+[.,!?;:'\"-]*", display_text)
 
-    def _enhance_audio(self, wav_path):
-        """Enhance audio: noise reduction, high-pass filter, normalization, compression."""
-        if not ENHANCEMENT_AVAILABLE:
-            return wav_path
+        # Create a copy of words to avoid modifying original
+        updated_words = []
+        display_idx = 0
 
-        try:
-            sample_rate, audio_data = wavfile.read(wav_path)
+        for word_dict in words:
+            word_copy = dict(word_dict)
+            azure_word = word_dict.get('Word', '').lower()
 
-            # Convert to float
-            if audio_data.dtype == np.int16:
-                audio_float = audio_data.astype(np.float32) / 32768.0
-            elif audio_data.dtype == np.int32:
-                audio_float = audio_data.astype(np.float32) / 2147483648.0
-            else:
-                audio_float = audio_data.astype(np.float32)
+            # Find matching display token
+            while display_idx < len(display_tokens):
+                display_word = display_tokens[display_idx]
+                # Compare lowercase versions (strip punctuation for comparison)
+                display_word_clean = re.sub(r'[^\w\']', '', display_word).lower()
 
-            # Convert stereo to mono
-            if len(audio_float.shape) > 1:
-                audio_float = np.mean(audio_float, axis=1)
+                if display_word_clean == azure_word or azure_word in display_word_clean:
+                    # Found match - use display version with casing and punctuation
+                    word_copy['Word'] = display_word
+                    display_idx += 1
+                    break
+                else:
+                    # Skip non-matching display tokens (might be extra punctuation)
+                    display_idx += 1
 
-            # 1. Noise reduction
-            audio_float = nr.reduce_noise(y=audio_float, sr=sample_rate, prop_decrease=0.8, stationary=True)
+            updated_words.append(word_copy)
 
-            # 2. High-pass filter (80Hz)
-            nyquist = sample_rate / 2
-            cutoff = 80 / nyquist
-            if cutoff < 1:
-                b, a = butter(4, cutoff, btype='high')
-                audio_float = filtfilt(b, a, audio_float)
-
-            # 3. Normalize to -20 dBFS
-            max_val = np.max(np.abs(audio_float))
-            if max_val > 0:
-                audio_float = audio_float * (10 ** (-20 / 20) / max_val)
-
-            # 4. Soft compression
-            threshold, ratio = 0.3, 4.0
-            audio_float = np.where(
-                np.abs(audio_float) > threshold,
-                np.sign(audio_float) * (threshold + (np.abs(audio_float) - threshold) / ratio),
-                audio_float
-            )
-
-            # Save back
-            wavfile.write(wav_path, sample_rate, np.clip(audio_float * 32768, -32768, 32767).astype(np.int16))
-            return wav_path
-
-        except Exception:
-            return wav_path
+        return updated_words
 
     def _transcribe_audio(self, wav_path, language='en-US'):
-        """Transcribe audio using OpenAI Whisper (falls back to Azure STT)."""
-        try:
-            openai_api_key = os.getenv('OPENAI_API_KEY')
-            if not openai_api_key:
-                return self._transcribe_audio_azure(wav_path, language)
+        """Transcribe audio using OpenAI Whisper (falls back to Azure STT).
 
-            start_time = time.time()
-            print(f"[WHISPER] Starting transcription... (t={start_time:.2f})")
-            client = OpenAI(api_key=openai_api_key)
-            whisper_lang = 'en' if language.lower().startswith('en') else 'en'
-
-            with open(wav_path, 'rb') as audio_file:
-                response = client.audio.transcriptions.create(
-                    model="whisper-1", file=audio_file, language=whisper_lang, response_format="text"
-                )
-            result = response.strip() if isinstance(response, str) else str(response).strip()
-            elapsed = time.time() - start_time
-            print(f"[WHISPER] Completed in {elapsed:.2f}s. Transcript: {result[:80]}...")
-            return result
-
-        except Exception:
-            return self._transcribe_audio_azure(wav_path, language)
+        This is a convenience wrapper that returns only the text.
+        Use _transcribe_with_timestamps if you need word timings.
+        """
+        result = self._transcribe_with_timestamps(wav_path, language)
+        return result.get('text', '')
 
     def _transcribe_with_timestamps(self, wav_path, language='en-US'):
         """Transcribe audio with word-level timestamps using Whisper.
@@ -493,8 +433,16 @@ class AzureSpeechAPI:
                     all_transcripts.append(evt.result.text)
 
                     if result_json.get('NBest') and len(result_json['NBest']) > 0:
-                        all_words.extend(result_json['NBest'][0].get('Words', []))
-                        pron = result_json['NBest'][0].get('PronunciationAssessment', {})
+                        nbest = result_json['NBest'][0]
+                        words = nbest.get('Words', [])
+
+                        # Map Display text back to words to preserve casing and punctuation
+                        display_text = nbest.get('Display', '')
+                        if display_text and words:
+                            words = self._map_display_to_words(display_text, words)
+
+                        all_words.extend(words)
+                        pron = nbest.get('PronunciationAssessment', {})
                         score_mapping = {
                             'AccuracyScore': 'accuracy',
                             'FluencyScore': 'fluency',
@@ -563,11 +511,23 @@ class AzureSpeechAPI:
         """Prepare audio file - convert to WAV and enhance."""
         if not os.path.exists(audio_file_path):
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
-        return self._convert_to_wav(audio_file_path)
+        return convert_to_wav(audio_file_path)
 
-    def transcribe_only(self, wav_path, language='en-US'):
-        """Get transcript using Whisper/Azure STT."""
-        return self._transcribe_audio(wav_path, language) or ""
+    def transcribe_only(self, wav_path, language='en-US', return_timestamps=False):
+        """Get transcript using Whisper/Azure STT.
+
+        Args:
+            wav_path: Path to WAV file
+            language: Language code
+            return_timestamps: If True, returns dict with 'text' and 'words' (timestamps)
+
+        Returns:
+            str or dict: Transcript text, or dict with text + word timestamps if return_timestamps=True
+        """
+        result = self._transcribe_with_timestamps(wav_path, language)
+        if return_timestamps:
+            return result
+        return result.get('text', '')
 
     def assess_pronunciation_only(self, wav_path, transcript, language='en-US'):
         """Pass 2 only: Run pronunciation assessment with given transcript."""
@@ -596,7 +556,7 @@ class AzureSpeechAPI:
             '_raw_azure_response': result['results']
         }
 
-    def _split_audio_into_chunks(self, wav_path, chunk_duration_ms=30000, min_silence_len=500, silence_thresh=-40, sentence_boundaries=None):
+    def _split_audio_into_chunks(self, wav_path, chunk_duration_ms=15000, min_silence_len=500, silence_thresh=-40, sentence_boundaries=None):
         """Split audio into chunks, prioritizing sentence boundaries over silence.
 
         Priority order for split points:
@@ -710,7 +670,7 @@ class AzureSpeechAPI:
             print(f"[AZURE-CHUNK] Error splitting audio: {e}, using original file")
             return [(wav_path, 0, None)]
 
-    def _assess_single_chunk(self, chunk_info, transcript_words, language, chunk_index):
+    def _assess_single_chunk(self, chunk_info, transcript_words, language, chunk_index, debug_folder=None):
         """Assess a single audio chunk.
 
         Args:
@@ -718,6 +678,7 @@ class AzureSpeechAPI:
             transcript_words: List of words expected in this chunk (approximate)
             language: Language code
             chunk_index: Index of this chunk for logging
+            debug_folder: Optional folder to save debug files
 
         Returns:
             dict: Assessment result for this chunk
@@ -728,32 +689,71 @@ class AzureSpeechAPI:
         start_time = time.time()
         print(f"[AZURE-CHUNK {chunk_index}] Starting assessment for chunk {start_ms/1000:.1f}s-{end_ms/1000:.1f}s...")
 
+        # Save debug input files
+        if debug_folder:
+            self._save_chunk_debug(debug_folder, chunk_index, chunk_path, chunk_transcript, start_ms, end_ms, 'input')
+
         try:
             result = self._run_continuous_assessment(chunk_path, chunk_transcript, language)
             elapsed = time.time() - start_time
             print(f"[AZURE-CHUNK {chunk_index}] Completed in {elapsed:.2f}s, {len(result['words'])} words")
 
-            # Add offset to word timings
+            # Add offset to word timings (word, phonemes, and syllables)
+            offset_100ns = int(start_ms * 10000)  # Convert ms to 100ns units
             for word in result['words']:
                 if 'Offset' in word:
-                    word['Offset'] += int(start_ms * 10000)  # Convert ms to 100ns units
+                    word['Offset'] += offset_100ns
+                # Also update phoneme offsets
+                for phoneme in word.get('Phonemes', []):
+                    if 'Offset' in phoneme:
+                        phoneme['Offset'] += offset_100ns
+                # Also update syllable offsets
+                for syllable in word.get('Syllables', []):
+                    if 'Offset' in syllable:
+                        syllable['Offset'] += offset_100ns
 
-            return {
+            chunk_result = {
                 'chunk_index': chunk_index,
                 'start_ms': start_ms,
                 'end_ms': end_ms,
                 'result': result,
                 'elapsed': elapsed
             }
+
+            # Save debug output files
+            if debug_folder:
+                self._save_chunk_debug(debug_folder, chunk_index, chunk_path, chunk_transcript, start_ms, end_ms, 'output', chunk_result)
+
+            return chunk_result
         except Exception as e:
             print(f"[AZURE-CHUNK {chunk_index}] Error: {e}")
-            return {
+            error_result = {
                 'chunk_index': chunk_index,
                 'start_ms': start_ms,
                 'end_ms': end_ms,
                 'result': None,
                 'error': str(e)
             }
+            if debug_folder:
+                self._save_chunk_debug(debug_folder, chunk_index, chunk_path, chunk_transcript, start_ms, end_ms, 'output', error_result)
+            return error_result
+
+    def _save_chunk_debug(self, debug_folder, chunk_index, chunk_path, transcript, start_ms, end_ms, phase, result=None):
+        """Save debug files for a chunk (audio input, reference text, assessment result)."""
+        try:
+            chunk_folder = os.path.join(debug_folder, f'chunk_{chunk_index}')
+            os.makedirs(chunk_folder, exist_ok=True)
+
+            if phase == 'input':
+                shutil.copy2(chunk_path, os.path.join(chunk_folder, 'audio.wav'))
+                with open(os.path.join(chunk_folder, 'input.json'), 'w', encoding='utf-8') as f:
+                    json.dump({'chunk_index': chunk_index, 'start_ms': start_ms, 'end_ms': end_ms,
+                               'reference_text': transcript}, f, indent=2, ensure_ascii=False)
+            elif phase == 'output' and result:
+                with open(os.path.join(chunk_folder, 'output.json'), 'w', encoding='utf-8') as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"[DEBUG] Failed to save chunk {chunk_index}: {e}")
 
     def _merge_chunk_results(self, chunk_results):
         """Merge results from multiple chunks into a single result.
@@ -824,13 +824,13 @@ class AzureSpeechAPI:
             'duration_sec': total_duration
         }
 
-    def assess_pronunciation_chunked(self, wav_path, transcript, language='en-US', max_workers=4):
+    def assess_pronunciation_chunked(self, wav_path, transcript, language='en-US', max_workers=None, save_debug=True, whisper_result=None):
         """Run pronunciation assessment with parallel chunk processing for long audio.
 
         This method splits long audio into chunks and processes them in parallel,
         significantly reducing processing time for audio > 30 seconds.
 
-        NEW: Uses Whisper word-level timestamps to find sentence boundaries,
+        Uses Whisper word-level timestamps to find sentence boundaries,
         ensuring chunks are split at natural sentence endings instead of mid-sentence.
 
         Args:
@@ -838,6 +838,8 @@ class AzureSpeechAPI:
             transcript: Full transcript text (can be empty, will use Whisper)
             language: Language code
             max_workers: Maximum parallel workers
+            save_debug: Whether to save debug files for each chunk (default True)
+            whisper_result: Pre-fetched Whisper result with timestamps (optional, avoids duplicate API call)
 
         Returns:
             dict: Same format as assess_pronunciation_only
@@ -845,8 +847,19 @@ class AzureSpeechAPI:
         start_time = time.time()
         print(f"[AZURE-CHUNKED] Starting chunked pronunciation assessment...")
 
-        # Step 1: Get word-level timestamps for sentence boundary detection
-        whisper_result = self._transcribe_with_timestamps(wav_path, language)
+        # Create debug folder with timestamp
+        debug_folder = None
+        if save_debug:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            debug_folder = os.path.join(RESULTS_FOLDER, 'debug_chunks', timestamp)
+            os.makedirs(debug_folder, exist_ok=True)
+            print(f"[DEBUG] Debug folder: {debug_folder}")
+
+        # Step 1: Get word-level timestamps (use pre-fetched if available)
+        if whisper_result is None:
+            whisper_result = self._transcribe_with_timestamps(wav_path, language)
+        else:
+            print(f"[AZURE-CHUNKED] Using pre-fetched Whisper result (saved 1 API call)")
         word_timestamps = whisper_result.get('words', [])
         whisper_transcript = whisper_result.get('text', '')
 
@@ -893,7 +906,7 @@ class AzureSpeechAPI:
                 total_duration = sum(c[2] - c[1] for c in chunks if c[2] is not None)
                 if total_duration > 0:
                     for chunk_path, start_ms, end_ms in chunks:
-                        chunk_duration = (end_ms - start_ms) if end_ms else 30000
+                        chunk_duration = (end_ms - start_ms) if end_ms else 15000
                         word_ratio = chunk_duration / total_duration
                         word_count = max(1, int(total_words * word_ratio))
                         chunk_word_lists.append(words[:word_count])
@@ -908,6 +921,31 @@ class AzureSpeechAPI:
                         chunk_word_lists.append(words[start_idx:end_idx])
             else:
                 chunk_word_lists = [[]] * len(chunks)
+
+        # Save session info to debug folder
+        if debug_folder:
+            try:
+                # Copy original audio
+                shutil.copy2(wav_path, os.path.join(debug_folder, 'original_audio.wav'))
+                # Save session info
+                session_info = {
+                    'timestamp': datetime.now().isoformat(),
+                    'original_audio': wav_path,
+                    'user_transcript': transcript,
+                    'whisper_transcript': whisper_transcript,
+                    'total_chunks': len(chunks),
+                    'chunks': [{'index': i, 'start_ms': c[1], 'end_ms': c[2],
+                               'ref_text': ' '.join(chunk_word_lists[i]) if i < len(chunk_word_lists) else ''}
+                              for i, c in enumerate(chunks)]
+                }
+                with open(os.path.join(debug_folder, 'session_info.json'), 'w', encoding='utf-8') as f:
+                    json.dump(session_info, f, indent=2, ensure_ascii=False)
+                if word_timestamps:
+                    with open(os.path.join(debug_folder, 'word_timestamps.json'), 'w', encoding='utf-8') as f:
+                        json.dump(word_timestamps, f, indent=2, ensure_ascii=False)
+                print(f"[DEBUG] Saved session info")
+            except Exception as e:
+                print(f"[DEBUG] Failed to save session info: {e}")
 
         # Process chunks in parallel
         chunk_results = []
@@ -924,7 +962,8 @@ class AzureSpeechAPI:
                         chunk_info,
                         word_list,
                         language,
-                        i
+                        i,
+                        debug_folder
                     )
                     futures[future] = i
 
@@ -952,6 +991,20 @@ class AzureSpeechAPI:
             except Exception as e:
                 print(f"[AZURE-CHUNKED] Failed to save results: {e}")
 
+            # Save final merged result to debug folder
+            if debug_folder:
+                try:
+                    with open(os.path.join(debug_folder, 'final_merged_result.json'), 'w', encoding='utf-8') as f:
+                        json.dump({
+                            'merged_result': merged_result,
+                            'fluency_metrics': fluency_metrics,
+                            'total_time': elapsed,
+                            'chunk_count': len(chunks)
+                        }, f, indent=2, ensure_ascii=False)
+                    print(f"[DEBUG] Saved final merged result")
+                except Exception as e:
+                    print(f"[DEBUG] Failed to save final result: {e}")
+
             return {
                 'status': 'success',
                 'speech_score': {
@@ -972,7 +1025,8 @@ class AzureSpeechAPI:
                 '_raw_azure_response': merged_result['results'],
                 '_chunked': True,
                 '_chunk_count': len(chunks),
-                '_total_time': elapsed
+                '_total_time': elapsed,
+                '_debug_folder': debug_folder
             }
 
         finally:
@@ -989,7 +1043,7 @@ class AzureSpeechAPI:
         if not os.path.exists(audio_file_path):
             raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
 
-        wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
+        wav_path, needs_cleanup = convert_to_wav(audio_file_path)
 
         try:
             # Pass 1: Transcription
@@ -1043,7 +1097,7 @@ class AzureSpeechAPI:
         if not text.strip():
             raise ValueError("Reference text is required for scripted evaluation")
 
-        wav_path, needs_cleanup = self._convert_to_wav(audio_file_path)
+        wav_path, needs_cleanup = convert_to_wav(audio_file_path)
 
         try:
             # For scripted, enable_miscue must be False in continuous mode

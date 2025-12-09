@@ -138,13 +138,13 @@ async def convert_audio(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _run_azure_assessment(client, wav_path, transcript, language='en-US'):
+def _run_azure_assessment(client, wav_path, transcript, language='en-US', whisper_result=None):
     """Run Azure pronunciation assessment (for parallel execution)
 
     Uses chunked processing for long audio (>45s) to speed up assessment.
     """
     # Use chunked assessment for faster processing of long audio
-    return client.assess_pronunciation_chunked(wav_path, transcript, language)
+    return client.assess_pronunciation_chunked(wav_path, transcript, language, whisper_result=whisper_result)
 
 def _run_openai_evaluation(transcript, question):
     """Run OpenAI content evaluation (for parallel execution)"""
@@ -180,10 +180,11 @@ async def evaluate_audio(
         with open(filepath, "wb") as buffer:
             buffer.write(await audio.read())
 
-        # Step 1: Prepare audio and get transcript (Whisper)
+        # Step 1: Prepare audio and get transcript with timestamps (Whisper - single call)
         client = AzureSpeechAPI()
         wav_path, needs_cleanup = client.prepare_audio(filepath)
-        transcript = client.transcribe_only(wav_path, language)
+        whisper_result = client.transcribe_only(wav_path, language, return_timestamps=True)
+        transcript = whisper_result.get('text', '')
 
         # Step 2: Run Azure and OpenAI in PARALLEL
         azure_result = None
@@ -191,7 +192,8 @@ async def evaluate_audio(
 
         if transcript:
             with ThreadPoolExecutor(max_workers=2) as executor:
-                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language)
+                # Pass whisper_result to avoid duplicate Whisper API call
+                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language, whisper_result)
                 openai_future = executor.submit(_run_openai_evaluation, transcript, question)
 
                 azure_result = azure_future.result()
@@ -499,10 +501,11 @@ async def evaluate_stream(
 
             yield f"data: {json.dumps({'type': 'audio_received', 'audio_data': audio_base64, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
-            # Step 2: Prepare audio and transcribe
+            # Step 2: Prepare audio and transcribe (with timestamps for smart chunking)
             client = AzureSpeechAPI()
             wav_path, needs_cleanup = client.prepare_audio(filepath)
-            transcript = client.transcribe_only(wav_path, language)
+            whisper_result = client.transcribe_only(wav_path, language, return_timestamps=True)
+            transcript = whisper_result.get('text', '')
 
             yield f"data: {json.dumps({'type': 'transcription_complete', 'transcript': transcript, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
@@ -516,8 +519,8 @@ async def evaluate_stream(
             openai_futures = {}
 
             with ThreadPoolExecutor(max_workers=6) as executor:
-                # Start Azure assessment
-                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language)
+                # Start Azure assessment (pass whisper_result to avoid duplicate API call)
+                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language, whisper_result)
 
                 # Start OpenAI criteria evaluations in parallel
                 criteria = ['coherence', 'lexical_resource', 'grammar', 'topic_relevance']

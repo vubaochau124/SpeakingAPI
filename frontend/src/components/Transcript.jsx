@@ -10,8 +10,7 @@ import {
   getSyllableText,
   getSyllableScore,
   getWordPlaybackTiming,
-  getSyllablePlaybackTiming,
-  getPhonemePlaybackTiming
+  getSyllablePlaybackTiming
 } from '../utils/azureWordUtils';
 
 function Transcript({ transcript, wordList, audioData }) {
@@ -80,11 +79,6 @@ function Transcript({ transcript, wordList, audioData }) {
 
   const playSyllableAudio = (syllable) => {
     const { startSec, durationSec } = getSyllablePlaybackTiming(syllable);
-    playAudio(startSec, durationSec);
-  };
-
-  const playPhonemeAudio = (phoneme) => {
-    const { startSec, durationSec } = getPhonemePlaybackTiming(phoneme);
     playAudio(startSec, durationSec);
   };
 
@@ -224,13 +218,12 @@ function Transcript({ transcript, wordList, audioData }) {
             {/* Phonemes Table */}
             {getPhonemes(selectedWord).length > 0 && (
               <div className="overflow-y-auto max-h-64">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes (click to hear)</h4>
+                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes</h4>
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-700/50">
                       <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Phoneme</th>
                       <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Score</th>
-                      <th className="text-center py-2 px-3 font-medium text-slate-300 text-sm">Play</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -245,15 +238,6 @@ function Transcript({ transcript, wordList, audioData }) {
                           <span className={`font-semibold ${getScoreColor(getPhonemeScore(phone))}`}>
                             {formatScore(getPhonemeScore(phone))}
                           </span>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <button
-                            onClick={() => audioData && playPhonemeAudio(phone)}
-                            disabled={!audioData || isPlaying}
-                            className="p-1 rounded hover:bg-slate-600/50 transition-colors disabled:opacity-50"
-                          >
-                            🔊
-                          </button>
                         </td>
                       </tr>
                     ))}
