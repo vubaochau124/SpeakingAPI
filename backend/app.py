@@ -96,5 +96,34 @@ if os.path.exists(FRONTEND_DIST):
 
 if __name__ == '__main__':
     import uvicorn
-    print("Backend server starting on http://localhost:5000")
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    import sys
+
+    # On Windows, workers don't work with uvicorn.run() - only on Unix
+    # But async handlers with asyncio.to_thread() still allow concurrent request handling
+    is_windows = sys.platform == 'win32'
+
+    if is_windows:
+        print("Backend server starting on http://localhost:5000 (single worker - Windows)")
+        print("Note: Concurrent requests are handled via asyncio thread pool")
+        uvicorn.run(
+            "app:app",
+            host="0.0.0.0",
+            port=5000,
+            limit_concurrency=100,
+            timeout_keep_alive=30,
+        )
+    else:
+        import multiprocessing
+        cpu_count = multiprocessing.cpu_count()
+        workers = min((2 * cpu_count) + 1, 4)
+
+        print(f"Backend server starting on http://localhost:5000 with {workers} workers")
+        uvicorn.run(
+            "app:app",
+            host="0.0.0.0",
+            port=5000,
+            workers=workers,
+            limit_concurrency=100,
+            limit_max_requests=1000,
+            timeout_keep_alive=30,
+        )

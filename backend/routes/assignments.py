@@ -5,21 +5,39 @@ import base64
 import uuid
 import shutil
 import time as time_module
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Class, ClassStudent, Assignment, AssignmentResult
+from models import User, Class, ClassTeacher, ClassStudent, Assignment, AssignmentResult
 from schemas import AssignmentCreate, AssignmentUpdate
 from auth import get_current_user
 from dependencies import require_teacher
-from utils.audio import allowed_file, UPLOAD_FOLDER, AUDIO_FOLDER, get_mime_type
+from utils.audio import allowed_file, AUDIO_FOLDER, get_mime_type, _get_safe_temp_path
 from utils.scoring import calculate_azure_score
 from azure_api import AzureSpeechAPI
 from openai_evaluator import OpenAIEvaluator
+
+
+def is_class_teacher(db: Session, class_id: int, user_id: int) -> bool:
+    """Check if user is a teacher of the class"""
+    return db.query(ClassTeacher).filter(
+        ClassTeacher.class_id == class_id,
+        ClassTeacher.teacher_id == user_id
+    ).first() is not None
+
+
+def is_past_deadline(deadline) -> bool:
+    """Check if deadline has passed"""
+    if not deadline:
+        return False
+    now = datetime.now(timezone.utc)
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    return now > deadline
 
 
 def _run_azure(client, wav_path, transcript):
@@ -58,7 +76,7 @@ async def get_class_assignments(
         ).first()
         if not enrollment:
             raise HTTPException(status_code=403, detail="Not enrolled in this class")
-    elif current_user.role == 'teacher' and class_.teacher_id != current_user.id:
+    elif current_user.role == 'teacher' and not is_class_teacher(db, class_id, current_user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     assignments = db.query(Assignment).filter(Assignment.class_id == class_id).all()
@@ -102,6 +120,8 @@ async def get_class_assignments(
             "question_text": a.question_text,
             "requirements": a.requirements,
             "instructions": a.instructions,
+            "deadline": a.deadline.isoformat() if a.deadline else None,
+            "is_past_deadline": is_past_deadline(a.deadline),
             "created_by": a.created_by,
             "creator_name": a.creator.username if a.creator else None,
             "created_at": a.created_at.isoformat() if a.created_at else None,
@@ -124,7 +144,8 @@ async def get_my_assignments(
         assignments = db.query(Assignment).all()
     elif current_user.role == 'teacher':
         # Teacher sees assignments for their classes
-        class_ids = [c.id for c in db.query(Class).filter(Class.teacher_id == current_user.id).all()]
+        teacher_assignments = db.query(ClassTeacher).filter(ClassTeacher.teacher_id == current_user.id).all()
+        class_ids = [a.class_id for a in teacher_assignments]
         assignments = db.query(Assignment).filter(Assignment.class_id.in_(class_ids)).all() if class_ids else []
     else:
         # Student sees assignments from enrolled classes
@@ -142,6 +163,8 @@ async def get_my_assignments(
             "question_text": a.question_text,
             "requirements": a.requirements,
             "instructions": a.instructions,
+            "deadline": a.deadline.isoformat() if a.deadline else None,
+            "is_past_deadline": is_past_deadline(a.deadline),
             "created_by": a.created_by,
             "creator_name": a.creator.username if a.creator else None,
             "created_at": a.created_at.isoformat() if a.created_at else None
@@ -162,7 +185,7 @@ async def create_assignment(
         raise HTTPException(status_code=404, detail="Class not found")
 
     # Teachers can only create assignments for their own classes
-    if teacher.role == 'teacher' and class_.teacher_id != teacher.id:
+    if teacher.role == 'teacher' and not is_class_teacher(db, assignment_data.class_id, teacher.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     assignment = Assignment(
@@ -171,6 +194,7 @@ async def create_assignment(
         question_text=assignment_data.question_text,
         requirements=assignment_data.requirements,
         instructions=assignment_data.instructions,
+        deadline=assignment_data.deadline,
         created_by=teacher.id
     )
     db.add(assignment)
@@ -193,8 +217,7 @@ async def update_assignment(
         raise HTTPException(status_code=404, detail="Assignment not found")
 
     # Check class ownership
-    class_ = db.query(Class).filter(Class.id == assignment.class_id).first()
-    if teacher.role == 'teacher' and class_.teacher_id != teacher.id:
+    if teacher.role == 'teacher' and not is_class_teacher(db, assignment.class_id, teacher.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     if assignment_data.topic is not None:
@@ -205,6 +228,8 @@ async def update_assignment(
         assignment.requirements = assignment_data.requirements
     if assignment_data.instructions is not None:
         assignment.instructions = assignment_data.instructions
+    if assignment_data.deadline is not None:
+        assignment.deadline = assignment_data.deadline
 
     db.commit()
     return {"message": "Assignment updated"}
@@ -222,8 +247,7 @@ async def delete_assignment(
         raise HTTPException(status_code=404, detail="Assignment not found")
 
     # Check class ownership
-    class_ = db.query(Class).filter(Class.id == assignment.class_id).first()
-    if teacher.role == 'teacher' and class_.teacher_id != teacher.id:
+    if teacher.role == 'teacher' and not is_class_teacher(db, assignment.class_id, teacher.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     # Delete related results first
@@ -253,7 +277,7 @@ async def get_assignment(
         ).first()
         if not enrollment:
             raise HTTPException(status_code=403, detail="Not enrolled in this class")
-    elif current_user.role == 'teacher' and class_.teacher_id != current_user.id:
+    elif current_user.role == 'teacher' and not is_class_teacher(db, assignment.class_id, current_user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     # Check completion status for students
@@ -283,6 +307,8 @@ async def get_assignment(
         "question_text": assignment.question_text,
         "requirements": assignment.requirements,
         "instructions": assignment.instructions,
+        "deadline": assignment.deadline.isoformat() if assignment.deadline else None,
+        "is_past_deadline": is_past_deadline(assignment.deadline),
         "created_by": assignment.created_by,
         "creator_name": assignment.creator.username if assignment.creator else None,
         "created_at": assignment.created_at.isoformat() if assignment.created_at else None,
@@ -322,6 +348,10 @@ async def submit_assignment(
     if existing_result:
         raise HTTPException(status_code=400, detail="Assignment already submitted")
 
+    # Check deadline
+    if is_past_deadline(assignment.deadline):
+        raise HTTPException(status_code=400, detail="Submission deadline has passed")
+
     # Validate file
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No file selected")
@@ -329,12 +359,16 @@ async def submit_assignment(
     if not allowed_file(audio.filename):
         raise HTTPException(status_code=400, detail="Invalid file type")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Get original extension
+    original_ext = os.path.splitext(audio.filename)[1].lower() or '.wav'
+
+    # Save to safe path (ASCII only) for Azure SDK compatibility
+    filepath = _get_safe_temp_path(original_ext)
 
     try:
+        content = await audio.read()
         with open(filepath, "wb") as buffer:
-            buffer.write(await audio.read())
+            buffer.write(content)
 
         # Step 1: Prepare audio and get transcript (Whisper)
         client = AzureSpeechAPI()
@@ -481,7 +515,7 @@ async def get_assignment_submissions(
 
     # Verify teacher owns the class
     class_ = db.query(Class).filter(Class.id == assignment.class_id).first()
-    if current_user.role == 'teacher' and class_.teacher_id != current_user.id:
+    if current_user.role == 'teacher' and not is_class_teacher(db, assignment.class_id, current_user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     # Get all students in the class
@@ -546,6 +580,8 @@ async def get_assignment_submissions(
         "question_text": assignment.question_text,
         "requirements": assignment.requirements,
         "instructions": assignment.instructions,
+        "deadline": assignment.deadline.isoformat() if assignment.deadline else None,
+        "is_past_deadline": is_past_deadline(assignment.deadline),
         "created_at": assignment.created_at.isoformat() if assignment.created_at else None,
         "total_students": len(enrolled_students),
         "submitted_count": len(submissions),
@@ -570,8 +606,7 @@ async def add_teacher_feedback(
         raise HTTPException(status_code=404, detail="Assignment not found")
 
     # Verify teacher owns the class
-    class_ = db.query(Class).filter(Class.id == assignment.class_id).first()
-    if current_user.role == 'teacher' and class_.teacher_id != current_user.id:
+    if current_user.role == 'teacher' and not is_class_teacher(db, assignment.class_id, current_user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     submission = db.query(AssignmentResult).filter(

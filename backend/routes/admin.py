@@ -53,6 +53,26 @@ async def get_all_teachers(
     }
 
 
+@router.get("/students")
+async def get_all_students(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get all students (admin only)"""
+    students = db.query(User).filter(User.role == 'student').all()
+    return {
+        "students": [
+            {
+                "id": s.id,
+                "username": s.username,
+                "email": s.email,
+                "created_at": s.created_at.isoformat() if s.created_at else None
+            }
+            for s in students
+        ]
+    }
+
+
 # ==================== CONTENT MANAGEMENT ====================
 
 @router.post("/conversations")

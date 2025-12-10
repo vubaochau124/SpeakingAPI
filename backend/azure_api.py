@@ -2,19 +2,13 @@ import os
 import re
 import json
 import threading
-import tempfile
 import time
 import shutil
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from openai import OpenAI
-from utils.scoring import azure_score_to_ielts
 from utils.audio import convert_to_wav, PYDUB_AVAILABLE
-
-# Results folder for debugging
-RESULTS_FOLDER = os.path.join(os.path.dirname(__file__), 'results')
-os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
 load_dotenv()
 
@@ -33,6 +27,41 @@ try:
 except ImportError:
     AZURE_SDK_AVAILABLE = False
     print("Warning: Azure Speech SDK not installed. Install with: pip install azure-cognitiveservices-speech")
+
+
+def _ensure_safe_path(filepath: str) -> tuple:
+    """Ensure file path is safe for Azure SDK (ASCII only, no special chars).
+
+    Azure Speech SDK on Windows has issues with paths containing:
+    - Unicode characters
+    - Parentheses ()
+    - Spaces and other special characters
+
+    Args:
+        filepath: Original file path
+
+    Returns:
+        tuple: (safe_path, needs_cleanup) - if path was copied, needs_cleanup=True
+    """
+    from utils.audio import _get_safe_temp_path
+
+    # Check if path contains unsafe characters
+    try:
+        # Try to encode as ASCII - if it fails, path has unicode
+        filepath.encode('ascii')
+        # Also check for problematic characters
+        unsafe_chars = set('()[]{}!@#$%^&*+=`~\'\"<>|;')
+        if not any(c in filepath for c in unsafe_chars) and ' ' not in os.path.basename(filepath):
+            return filepath, False
+    except UnicodeEncodeError:
+        pass
+
+    # Path is unsafe, copy to safe location
+    ext = os.path.splitext(filepath)[1].lower() or '.wav'
+    safe_path = _get_safe_temp_path(ext)
+    shutil.copy2(filepath, safe_path)
+    print(f"[AZURE] Copied to safe path: {os.path.basename(filepath)} -> {os.path.basename(safe_path)}")
+    return safe_path, True
 
 
 class AzureSpeechAPI:
@@ -187,36 +216,47 @@ class AzureSpeechAPI:
 
     def _transcribe_audio_azure(self, wav_path, language='en-US'):
         """Fallback: Speech-to-Text using Azure."""
-        audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
-        speech_recognizer = speechsdk.SpeechRecognizer(
-            speech_config=self.speech_config, language=language, audio_config=audio_config
-        )
+        # Ensure path is safe for Azure SDK
+        safe_path, safe_cleanup = _ensure_safe_path(wav_path)
 
-        all_transcripts = []
-        done = threading.Event()
-        error_message = [None]
+        try:
+            audio_config = speechsdk.audio.AudioConfig(filename=safe_path)
+            speech_recognizer = speechsdk.SpeechRecognizer(
+                speech_config=self.speech_config, language=language, audio_config=audio_config
+            )
 
-        def on_recognized(evt):
-            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                all_transcripts.append(evt.result.text)
+            all_transcripts = []
+            done = threading.Event()
+            error_message = [None]
 
-        def on_canceled(evt):
-            if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
-                error_message[0] = evt.cancellation_details.error_details
-            done.set()
+            def on_recognized(evt):
+                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                    all_transcripts.append(evt.result.text)
 
-        def on_session_stopped(evt):
-            done.set()
+            def on_canceled(evt):
+                if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
+                    error_message[0] = evt.cancellation_details.error_details
+                done.set()
 
-        speech_recognizer.recognized.connect(on_recognized)
-        speech_recognizer.canceled.connect(on_canceled)
-        speech_recognizer.session_stopped.connect(on_session_stopped)
+            def on_session_stopped(evt):
+                done.set()
 
-        speech_recognizer.start_continuous_recognition()
-        done.wait(timeout=120)
-        speech_recognizer.stop_continuous_recognition()
+            speech_recognizer.recognized.connect(on_recognized)
+            speech_recognizer.canceled.connect(on_canceled)
+            speech_recognizer.session_stopped.connect(on_session_stopped)
 
-        return '' if error_message[0] else ' '.join(all_transcripts)
+            speech_recognizer.start_continuous_recognition()
+            done.wait(timeout=120)
+            speech_recognizer.stop_continuous_recognition()
+
+            return '' if error_message[0] else ' '.join(all_transcripts)
+        finally:
+            # Cleanup safe path if created
+            if safe_cleanup and os.path.exists(safe_path):
+                try:
+                    os.remove(safe_path)
+                except Exception:
+                    pass
 
     def _map_azure_to_frontend_word(self, azure_word):
         """Map Azure word result to frontend-expected word format"""
@@ -395,117 +435,119 @@ class AzureSpeechAPI:
         Returns:
             dict: Raw assessment results with scores and words
         """
-        start_time = time.time()
-        print(f"[AZURE] Starting pronunciation assessment... (t={start_time:.2f})")
-        audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
+        # Ensure path is safe for Azure SDK
+        safe_path, safe_cleanup = _ensure_safe_path(wav_path)
 
-        if enable_miscue is None:
-            enable_miscue = bool(reference_text)
-
-        pronunciation_config = speechsdk.PronunciationAssessmentConfig(
-            reference_text=reference_text,
-            grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
-            granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
-            enable_miscue=enable_miscue
-        )
-        pronunciation_config.phoneme_alphabet = "IPA"
-        pronunciation_config.enable_prosody_assessment()
-
-        speech_recognizer = speechsdk.SpeechRecognizer(
-            speech_config=self.speech_config,
-            language=language,
-            audio_config=audio_config
-        )
-        pronunciation_config.apply_to(speech_recognizer)
-
-        # Storage
-        all_results, all_words, all_transcripts = [], [], []
-        scores = {'accuracy': [], 'fluency': [], 'prosody': [], 'pronunciation': [], 'completeness': []}
-        done = threading.Event()
-        error_message = [None]
-
-        def on_recognized(evt):
-            if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                json_result = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
-                if json_result:
-                    result_json = json.loads(json_result)
-                    all_results.append(result_json)
-                    all_transcripts.append(evt.result.text)
-
-                    if result_json.get('NBest') and len(result_json['NBest']) > 0:
-                        nbest = result_json['NBest'][0]
-                        words = nbest.get('Words', [])
-
-                        # Map Display text back to words to preserve casing and punctuation
-                        display_text = nbest.get('Display', '')
-                        if display_text and words:
-                            words = self._map_display_to_words(display_text, words)
-
-                        all_words.extend(words)
-                        pron = nbest.get('PronunciationAssessment', {})
-                        score_mapping = {
-                            'AccuracyScore': 'accuracy',
-                            'FluencyScore': 'fluency',
-                            'ProsodyScore': 'prosody',
-                            'PronScore': 'pronunciation',
-                            'CompletenessScore': 'completeness'
-                        }
-                        for azure_key, score_key in score_mapping.items():
-                            if pron.get(azure_key) is not None:
-                                scores[score_key].append(pron[azure_key])
-
-        def on_canceled(evt):
-            if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
-                error_message[0] = evt.cancellation_details.error_details
-            done.set()
-
-        def on_session_stopped(evt):
-            done.set()
-
-        speech_recognizer.recognized.connect(on_recognized)
-        speech_recognizer.canceled.connect(on_canceled)
-        speech_recognizer.session_stopped.connect(on_session_stopped)
-
-        speech_recognizer.start_continuous_recognition()
-        done.wait(timeout=120)
-        speech_recognizer.stop_continuous_recognition()
-
-        if error_message[0]:
-            raise Exception(f"Azure Speech API error: {error_message[0]}")
-
-        # Calculate averages
-        avg = lambda lst: sum(lst) / len(lst) if lst else 0
-        total_duration = sum(r.get('Duration', 0) for r in all_results)
-
-        elapsed = time.time() - start_time
-        final_scores = {
-            'accuracy': round(avg(scores['accuracy']), 1),
-            'fluency': round(avg(scores['fluency']), 1),
-            'prosody': round(avg(scores['prosody']), 1),
-            'pronunciation': round(avg(scores['pronunciation']), 1),
-            'completeness': round(avg(scores['completeness']), 1) if track_completeness else None
-        }
-        print(f"[AZURE] Completed in {elapsed:.2f}s. Words: {len(all_words)}, Scores: {final_scores}")
-
-        # Save Azure results to file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        azure_result = {
-            'timestamp': timestamp,
-            'transcript': ' '.join(all_transcripts),
-            'words': all_words,
-            'results': all_results,
-            'scores': final_scores,
-            'duration_sec': total_duration / 10000000 if total_duration else 5
-        }
         try:
-            # Lưu raw JSON từ Azure (all_results)
-            with open(os.path.join(RESULTS_FOLDER, 'azure_raw.json'), 'w', encoding='utf-8') as f:
-                json.dump(all_results, f, indent=2, ensure_ascii=False)
-            print(f"[AZURE] Raw results saved to results/azure_raw.json")
-        except Exception as e:
-            print(f"[AZURE] Failed to save results: {e}")
+            start_time = time.time()
+            print(f"[AZURE] Starting pronunciation assessment... (t={start_time:.2f})")
+            audio_config = speechsdk.audio.AudioConfig(filename=safe_path)
 
-        return azure_result
+            if enable_miscue is None:
+                enable_miscue = bool(reference_text)
+
+            pronunciation_config = speechsdk.PronunciationAssessmentConfig(
+                reference_text=reference_text,
+                grading_system=speechsdk.PronunciationAssessmentGradingSystem.HundredMark,
+                granularity=speechsdk.PronunciationAssessmentGranularity.Phoneme,
+                enable_miscue=enable_miscue
+            )
+            pronunciation_config.phoneme_alphabet = "IPA"
+            pronunciation_config.enable_prosody_assessment()
+
+            speech_recognizer = speechsdk.SpeechRecognizer(
+                speech_config=self.speech_config,
+                language=language,
+                audio_config=audio_config
+            )
+            pronunciation_config.apply_to(speech_recognizer)
+
+            # Storage
+            all_results, all_words, all_transcripts = [], [], []
+            scores = {'accuracy': [], 'fluency': [], 'prosody': [], 'pronunciation': [], 'completeness': []}
+            done = threading.Event()
+            error_message = [None]
+
+            def on_recognized(evt):
+                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                    json_result = evt.result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
+                    if json_result:
+                        result_json = json.loads(json_result)
+                        all_results.append(result_json)
+                        all_transcripts.append(evt.result.text)
+
+                        if result_json.get('NBest') and len(result_json['NBest']) > 0:
+                            nbest = result_json['NBest'][0]
+                            words = nbest.get('Words', [])
+
+                            # Map Display text back to words to preserve casing and punctuation
+                            display_text = nbest.get('Display', '')
+                            if display_text and words:
+                                words = self._map_display_to_words(display_text, words)
+
+                            all_words.extend(words)
+                            pron = nbest.get('PronunciationAssessment', {})
+                            score_mapping = {
+                                'AccuracyScore': 'accuracy',
+                                'FluencyScore': 'fluency',
+                                'ProsodyScore': 'prosody',
+                                'PronScore': 'pronunciation',
+                                'CompletenessScore': 'completeness'
+                            }
+                            for azure_key, score_key in score_mapping.items():
+                                if pron.get(azure_key) is not None:
+                                    scores[score_key].append(pron[azure_key])
+
+            def on_canceled(evt):
+                if evt.cancellation_details.reason == speechsdk.CancellationReason.Error:
+                    error_message[0] = evt.cancellation_details.error_details
+                done.set()
+
+            def on_session_stopped(evt):
+                done.set()
+
+            speech_recognizer.recognized.connect(on_recognized)
+            speech_recognizer.canceled.connect(on_canceled)
+            speech_recognizer.session_stopped.connect(on_session_stopped)
+
+            speech_recognizer.start_continuous_recognition()
+            done.wait(timeout=120)
+            speech_recognizer.stop_continuous_recognition()
+
+            if error_message[0]:
+                raise Exception(f"Azure Speech API error: {error_message[0]}")
+
+            # Calculate averages
+            avg = lambda lst: sum(lst) / len(lst) if lst else 0
+            total_duration = sum(r.get('Duration', 0) for r in all_results)
+
+            elapsed = time.time() - start_time
+            final_scores = {
+                'accuracy': round(avg(scores['accuracy']), 1),
+                'fluency': round(avg(scores['fluency']), 1),
+                'prosody': round(avg(scores['prosody']), 1),
+                'pronunciation': round(avg(scores['pronunciation']), 1),
+                'completeness': round(avg(scores['completeness']), 1) if track_completeness else None
+            }
+            print(f"[AZURE] Completed in {elapsed:.2f}s. Words: {len(all_words)}, Scores: {final_scores}")
+
+            azure_result = {
+                'timestamp': datetime.now().strftime('%Y%m%d_%H%M%S'),
+                'transcript': ' '.join(all_transcripts),
+                'words': all_words,
+                'results': all_results,
+                'scores': final_scores,
+                'duration_sec': total_duration / 10000000 if total_duration else 5
+            }
+
+            return azure_result
+        finally:
+            # Cleanup safe path if created
+            if safe_cleanup and os.path.exists(safe_path):
+                try:
+                    os.remove(safe_path)
+                except Exception:
+                    pass
 
     def prepare_audio(self, audio_file_path):
         """Prepare audio file - convert to WAV and enhance."""
@@ -649,9 +691,10 @@ class AzureSpeechAPI:
                                 best_split = sp_time
                                 split_type = 'silence'
 
-                # Extract chunk
+                # Extract chunk - use safe temp path for Azure SDK compatibility
+                from utils.audio import _get_safe_temp_path
                 chunk_audio = audio[current_start:best_split]
-                chunk_path = tempfile.mktemp(suffix=f'_chunk{chunk_index}.wav')
+                chunk_path = _get_safe_temp_path(f'_chunk{chunk_index}.wav')
                 chunk_audio.export(chunk_path, format='wav')
 
                 chunks.append((chunk_path, current_start, best_split))
@@ -720,10 +763,6 @@ class AzureSpeechAPI:
                 'elapsed': elapsed
             }
 
-            # Save debug output files
-            if debug_folder:
-                self._save_chunk_debug(debug_folder, chunk_index, chunk_path, chunk_transcript, start_ms, end_ms, 'output', chunk_result)
-
             return chunk_result
         except Exception as e:
             print(f"[AZURE-CHUNK {chunk_index}] Error: {e}")
@@ -734,26 +773,7 @@ class AzureSpeechAPI:
                 'result': None,
                 'error': str(e)
             }
-            if debug_folder:
-                self._save_chunk_debug(debug_folder, chunk_index, chunk_path, chunk_transcript, start_ms, end_ms, 'output', error_result)
             return error_result
-
-    def _save_chunk_debug(self, debug_folder, chunk_index, chunk_path, transcript, start_ms, end_ms, phase, result=None):
-        """Save debug files for a chunk (audio input, reference text, assessment result)."""
-        try:
-            chunk_folder = os.path.join(debug_folder, f'chunk_{chunk_index}')
-            os.makedirs(chunk_folder, exist_ok=True)
-
-            if phase == 'input':
-                shutil.copy2(chunk_path, os.path.join(chunk_folder, 'audio.wav'))
-                with open(os.path.join(chunk_folder, 'input.json'), 'w', encoding='utf-8') as f:
-                    json.dump({'chunk_index': chunk_index, 'start_ms': start_ms, 'end_ms': end_ms,
-                               'reference_text': transcript}, f, indent=2, ensure_ascii=False)
-            elif phase == 'output' and result:
-                with open(os.path.join(chunk_folder, 'output.json'), 'w', encoding='utf-8') as f:
-                    json.dump(result, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"[DEBUG] Failed to save chunk {chunk_index}: {e}")
 
     def _merge_chunk_results(self, chunk_results):
         """Merge results from multiple chunks into a single result.
@@ -824,7 +844,7 @@ class AzureSpeechAPI:
             'duration_sec': total_duration
         }
 
-    def assess_pronunciation_chunked(self, wav_path, transcript, language='en-US', max_workers=None, save_debug=True, whisper_result=None):
+    def assess_pronunciation_chunked(self, wav_path, transcript, language='en-US', max_workers=None, whisper_result=None):
         """Run pronunciation assessment with parallel chunk processing for long audio.
 
         This method splits long audio into chunks and processes them in parallel,
@@ -838,7 +858,6 @@ class AzureSpeechAPI:
             transcript: Full transcript text (can be empty, will use Whisper)
             language: Language code
             max_workers: Maximum parallel workers
-            save_debug: Whether to save debug files for each chunk (default True)
             whisper_result: Pre-fetched Whisper result with timestamps (optional, avoids duplicate API call)
 
         Returns:
@@ -846,14 +865,6 @@ class AzureSpeechAPI:
         """
         start_time = time.time()
         print(f"[AZURE-CHUNKED] Starting chunked pronunciation assessment...")
-
-        # Create debug folder with timestamp
-        debug_folder = None
-        if save_debug:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            debug_folder = os.path.join(RESULTS_FOLDER, 'debug_chunks', timestamp)
-            os.makedirs(debug_folder, exist_ok=True)
-            print(f"[DEBUG] Debug folder: {debug_folder}")
 
         # Step 1: Get word-level timestamps (use pre-fetched if available)
         if whisper_result is None:
@@ -922,31 +933,6 @@ class AzureSpeechAPI:
             else:
                 chunk_word_lists = [[]] * len(chunks)
 
-        # Save session info to debug folder
-        if debug_folder:
-            try:
-                # Copy original audio
-                shutil.copy2(wav_path, os.path.join(debug_folder, 'original_audio.wav'))
-                # Save session info
-                session_info = {
-                    'timestamp': datetime.now().isoformat(),
-                    'original_audio': wav_path,
-                    'user_transcript': transcript,
-                    'whisper_transcript': whisper_transcript,
-                    'total_chunks': len(chunks),
-                    'chunks': [{'index': i, 'start_ms': c[1], 'end_ms': c[2],
-                               'ref_text': ' '.join(chunk_word_lists[i]) if i < len(chunk_word_lists) else ''}
-                              for i, c in enumerate(chunks)]
-                }
-                with open(os.path.join(debug_folder, 'session_info.json'), 'w', encoding='utf-8') as f:
-                    json.dump(session_info, f, indent=2, ensure_ascii=False)
-                if word_timestamps:
-                    with open(os.path.join(debug_folder, 'word_timestamps.json'), 'w', encoding='utf-8') as f:
-                        json.dump(word_timestamps, f, indent=2, ensure_ascii=False)
-                print(f"[DEBUG] Saved session info")
-            except Exception as e:
-                print(f"[DEBUG] Failed to save session info: {e}")
-
         # Process chunks in parallel
         chunk_results = []
         temp_files = []
@@ -963,7 +949,7 @@ class AzureSpeechAPI:
                         word_list,
                         language,
                         i,
-                        debug_folder
+                        None  # No debug folder
                     )
                     futures[future] = i
 
@@ -982,28 +968,6 @@ class AzureSpeechAPI:
                 merged_result['words'],
                 merged_result['duration_sec']
             )
-
-            # Save merged results
-            try:
-                with open(os.path.join(RESULTS_FOLDER, 'azure_raw.json'), 'w', encoding='utf-8') as f:
-                    json.dump(merged_result['results'], f, indent=2, ensure_ascii=False)
-                print(f"[AZURE-CHUNKED] Raw results saved to results/azure_raw.json")
-            except Exception as e:
-                print(f"[AZURE-CHUNKED] Failed to save results: {e}")
-
-            # Save final merged result to debug folder
-            if debug_folder:
-                try:
-                    with open(os.path.join(debug_folder, 'final_merged_result.json'), 'w', encoding='utf-8') as f:
-                        json.dump({
-                            'merged_result': merged_result,
-                            'fluency_metrics': fluency_metrics,
-                            'total_time': elapsed,
-                            'chunk_count': len(chunks)
-                        }, f, indent=2, ensure_ascii=False)
-                    print(f"[DEBUG] Saved final merged result")
-                except Exception as e:
-                    print(f"[DEBUG] Failed to save final result: {e}")
 
             return {
                 'status': 'success',
@@ -1025,8 +989,7 @@ class AzureSpeechAPI:
                 '_raw_azure_response': merged_result['results'],
                 '_chunked': True,
                 '_chunk_count': len(chunks),
-                '_total_time': elapsed,
-                '_debug_folder': debug_folder
+                '_total_time': elapsed
             }
 
         finally:
@@ -1035,58 +998,6 @@ class AzureSpeechAPI:
                 try:
                     if os.path.exists(temp_file):
                         os.remove(temp_file)
-                except Exception:
-                    pass
-
-    def score_audio(self, audio_file_path, relevance_context="", language='en-US'):
-        """Evaluate speech using 2-pass approach: Whisper transcription + Azure pronunciation."""
-        if not os.path.exists(audio_file_path):
-            raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
-
-        wav_path, needs_cleanup = convert_to_wav(audio_file_path)
-
-        try:
-            # Pass 1: Transcription
-            transcript = self._transcribe_audio(wav_path, language) or ""
-
-            # Pass 2: Pronunciation assessment
-            result = self._run_continuous_assessment(wav_path, transcript, language)
-            fluency_metrics = self._calculate_fluency_metrics(result['words'], result['duration_sec'])
-
-            if not result['transcript']:
-                return {
-                    'status': 'error',
-                    'error': 'No speech recognized',
-                    'speech_score': {
-                        'transcript': '',
-                        'word_score_list': [],
-                        'scores': {'pronunciation': 0, 'fluency': 0, 'accuracy': 0, 'grammar': None, 'vocab': None, 'coherence': None}
-                    }
-                }
-
-            return {
-                'status': 'success',
-                'speech_score': {
-                    'transcript': result['transcript'],
-                    'word_score_list': result['words'],
-                    'scores': {
-                        'pronunciation': result['scores']['pronunciation'],
-                        'fluency': result['scores']['fluency'],
-                        'accuracy': result['scores']['accuracy'],
-                        'grammar': None,
-                        'vocab': None,
-                        'coherence': None
-                    },
-                    'fluency': fluency_metrics,
-                    'detected_dialect': {'lang_id': language}
-                },
-                '_raw_azure_response': result['results']
-            }
-
-        finally:
-            if needs_cleanup and os.path.exists(wav_path):
-                try:
-                    os.remove(wav_path)
                 except Exception:
                     pass
 

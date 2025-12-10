@@ -1,15 +1,9 @@
 import os
 import json
 import time
-import sys
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 from dotenv import load_dotenv
-
-# Results folder for debugging
-RESULTS_FOLDER = os.path.join(os.path.dirname(__file__), 'results')
-os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
 # =============================================================================
 # CHUNKED EVALUATION PROMPTS - One per criterion for parallel processing
@@ -231,14 +225,6 @@ class OpenAIEvaluator:
 
             elapsed = time.time() - start_time
             print(f"[OPENAI-GPT] Completed {criterion} in {elapsed:.2f}s. Band: {result.get('band', 'N/A')}", flush=True)
-
-            # Save each criterion result to file
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-            try:
-                with open(os.path.join(RESULTS_FOLDER, f'openai_{criterion}.json'), 'w', encoding='utf-8') as f:
-                    json.dump({'criterion': criterion, 'result': result, 'elapsed': elapsed}, f, indent=2, ensure_ascii=False)
-            except Exception:
-                pass
 
             return (criterion, result)
         except Exception as e:

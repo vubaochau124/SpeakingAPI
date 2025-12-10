@@ -3,11 +3,10 @@ import os
 import json
 import base64
 import time as time_module
-import tempfile
 import asyncio
 from datetime import datetime
 from typing import Optional, Dict, List
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
@@ -15,21 +14,63 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, UserResult
 from auth import get_current_user
-from utils.audio import allowed_file, convert_to_wav, UPLOAD_FOLDER, get_mime_type
+from utils.audio import allowed_file, convert_to_wav, get_mime_type, _get_safe_temp_path
 from utils.scoring import calculate_azure_score
 from azure_api import AzureSpeechAPI
 from openai_evaluator import OpenAIEvaluator
 
-# Thread pool for background tasks
-_background_executor = ThreadPoolExecutor(max_workers=4)
+# Thread pool for background tasks (increased for better concurrency)
+_background_executor = ThreadPoolExecutor(max_workers=8)
 
 # Store for active streaming sessions
 _streaming_sessions: Dict[str, dict] = {}
+
+# Thread-local storage for API clients (safe for concurrent requests)
+import threading
+_thread_local = threading.local()
+
+
+def get_azure_client() -> AzureSpeechAPI:
+    """Get thread-local Azure client instance (one per thread for thread safety)."""
+    if not hasattr(_thread_local, 'azure_client'):
+        _thread_local.azure_client = AzureSpeechAPI()
+    return _thread_local.azure_client
+
+
+def get_openai_client() -> OpenAIEvaluator:
+    """Get thread-local OpenAI client instance."""
+    if not hasattr(_thread_local, 'openai_client'):
+        _thread_local.openai_client = OpenAIEvaluator()
+    return _thread_local.openai_client
 
 router = APIRouter(prefix="/api", tags=["Evaluation"])
 
 # Supported languages for pronunciation assessment
 SUPPORTED_LANGUAGES = ['en-US', 'zh-CN', 'ja-JP', 'ko-KR']
+
+
+async def save_upload_file_safe(upload_file: UploadFile) -> tuple:
+    """Save uploaded file to a safe path (ASCII only) for Azure SDK compatibility.
+
+    Args:
+        upload_file: FastAPI UploadFile object
+
+    Returns:
+        tuple: (safe_path, original_extension) - safe_path uses UUID, needs cleanup after use
+    """
+    # Get original extension
+    original_name = upload_file.filename or "audio.wav"
+    ext = os.path.splitext(original_name)[1].lower() or '.wav'
+
+    # Create safe path with UUID
+    safe_path = _get_safe_temp_path(ext)
+
+    # Save file content
+    content = await upload_file.read()
+    with open(safe_path, 'wb') as f:
+        f.write(content)
+
+    return safe_path, ext
 
 
 @router.get("/health")
@@ -83,15 +124,11 @@ async def convert_audio(
     if format not in ['mp3', 'wav']:
         raise HTTPException(status_code=400, detail="Format must be 'mp3' or 'wav'")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Save to safe path (ASCII only) for compatibility
+    filepath, ext = await save_upload_file_safe(audio)
+    ext = ext.lstrip('.')
 
     try:
-        with open(filepath, "wb") as buffer:
-            content = await audio.read()
-            buffer.write(content)
-
-        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'webm'
         try:
             if ext == 'webm':
                 audio_segment = AudioSegment.from_file(filepath, format='webm')
@@ -100,7 +137,7 @@ async def convert_audio(
             elif ext == 'wav':
                 audio_segment = AudioSegment.from_wav(filepath)
             elif ext == 'm4a':
-                audio_segment = AudioSegment.from_file(filepath, format='m4a')
+                audio_segment = AudioSegment.from_file(filepath, format='mp4')
             elif ext == 'ogg':
                 audio_segment = AudioSegment.from_ogg(filepath)
             else:
@@ -108,7 +145,7 @@ async def convert_audio(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to load audio: {str(e)}")
 
-        output_path = os.path.join(UPLOAD_FOLDER, f"converted.{format}")
+        output_path = _get_safe_temp_path(f".{format}")
 
         if format == 'mp3':
             audio_segment.export(output_path, format='mp3', bitrate='128k')
@@ -138,12 +175,20 @@ async def convert_audio(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _run_azure_assessment(client, wav_path, transcript, language='en-US', whisper_result=None):
+def _write_file(filepath: str, content: bytes):
+    """Write content to file (for use with asyncio.to_thread)."""
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+
+def _run_azure_assessment(wav_path, transcript, language='en-US', whisper_result=None):
     """Run Azure pronunciation assessment (for parallel execution)
 
     Uses chunked processing for long audio (>45s) to speed up assessment.
+    Creates its own client to ensure thread safety.
     """
-    # Use chunked assessment for faster processing of long audio
+    # Create client in worker thread for thread safety
+    client = AzureSpeechAPI()
     return client.assess_pronunciation_chunked(wav_path, transcript, language, whisper_result=whisper_result)
 
 def _run_openai_evaluation(transcript, question):
@@ -173,31 +218,28 @@ async def evaluate_audio(
     if language not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Save to safe path (ASCII only) for Azure SDK compatibility
+    filepath, _ = await save_upload_file_safe(audio)
+    filename = os.path.basename(filepath)
 
     try:
-        with open(filepath, "wb") as buffer:
-            buffer.write(await audio.read())
-
         # Step 1: Prepare audio and get transcript with timestamps (Whisper - single call)
-        client = AzureSpeechAPI()
-        wav_path, needs_cleanup = client.prepare_audio(filepath)
-        whisper_result = client.transcribe_only(wav_path, language, return_timestamps=True)
+        # Run blocking operations in thread pool to not block event loop
+        client = get_azure_client()
+        wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
+        whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
         transcript = whisper_result.get('text', '')
 
-        # Step 2: Run Azure and OpenAI in PARALLEL
+        # Step 2: Run Azure and OpenAI in PARALLEL (non-blocking)
         azure_result = None
         openai_eval = None
 
         if transcript:
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                # Pass whisper_result to avoid duplicate Whisper API call
-                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language, whisper_result)
-                openai_future = executor.submit(_run_openai_evaluation, transcript, question)
-
-                azure_result = azure_future.result()
-                openai_eval = openai_future.result()
+            # Use asyncio.to_thread to run blocking calls without blocking the event loop
+            azure_result, openai_eval = await asyncio.gather(
+                asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result),
+                asyncio.to_thread(_run_openai_evaluation, transcript, question)
+            )
 
         # Cleanup temp WAV
         if needs_cleanup and os.path.exists(wav_path):
@@ -216,7 +258,7 @@ async def evaluate_audio(
         # Recalculate combined result with actual Azure bands
         combined_result = None
         if openai_eval:
-            openai_client = OpenAIEvaluator()
+            openai_client = get_openai_client()
             combined_result = openai_client._calculate_combined_result(
                 openai_result, pronunciation_band, fluency_band
             )
@@ -295,17 +337,16 @@ async def evaluate_azure_only(
     if language not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Save to safe path (ASCII only) for Azure SDK compatibility
+    filepath, _ = await save_upload_file_safe(audio)
+    filename = os.path.basename(filepath)
 
     try:
-        with open(filepath, "wb") as buffer:
-            buffer.write(await audio.read())
-
-        client = AzureSpeechAPI()
-        wav_path, needs_cleanup = client.prepare_audio(filepath)
-        transcript = client.transcribe_only(wav_path, language)
-        azure_result = client.assess_pronunciation_only(wav_path, transcript, language)
+        # Run all blocking operations in thread pool
+        client = AzureSpeechAPI()  # Create new client for thread safety
+        wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
+        transcript = await asyncio.to_thread(client.transcribe_only, wav_path, language)
+        azure_result = await asyncio.to_thread(client.assess_pronunciation_only, wav_path, transcript, language)
 
         if needs_cleanup and os.path.exists(wav_path):
             try:
@@ -315,10 +356,13 @@ async def evaluate_azure_only(
 
         azure_score = calculate_azure_score(azure_result)
 
-        with open(filepath, 'rb') as audio_file:
-            audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
-            audio_base64 = f"data:{get_mime_type(filename)};base64,{audio_data}"
+        # Non-blocking file read
+        def _read_audio_base64(fp, fname):
+            with open(fp, 'rb') as f:
+                data = base64.b64encode(f.read()).decode('utf-8')
+            return f"data:{get_mime_type(fname)};base64,{data}"
 
+        audio_base64 = await asyncio.to_thread(_read_audio_base64, filepath, filename)
         os.remove(filepath)
 
         return {
@@ -353,7 +397,7 @@ async def evaluate_openai_only(
         raise HTTPException(status_code=400, detail="Transcript is required")
 
     try:
-        openai_client = OpenAIEvaluator()
+        openai_client = get_openai_client()
         evaluation = openai_client.enhance_evaluation(
             transcript=transcript,
             question=question,
@@ -383,7 +427,7 @@ async def evaluate_openai_streaming(
 
     def generate_sse():
         try:
-            openai_client = OpenAIEvaluator()
+            openai_client = get_openai_client()
             for chunk in openai_client.evaluate_chunked_streaming(
                 transcript=transcript,
                 question=question,
@@ -473,13 +517,11 @@ async def evaluate_stream(
     if language not in SUPPORTED_LANGUAGES:
         raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Save to safe path (ASCII only) for Azure SDK compatibility
+    filepath, _ = await save_upload_file_safe(audio)
+    filename = os.path.basename(filepath)
 
-    # Read audio content first
-    audio_content = await audio.read()
-
-    def generate_sse():
+    async def generate_sse_async():
         start_time = time_module.time()
         wav_path = None
         needs_cleanup = False
@@ -490,9 +532,6 @@ async def evaluate_stream(
         audio_base64 = ""
 
         try:
-            # Step 1: Save audio file
-            with open(filepath, "wb") as buffer:
-                buffer.write(audio_content)
 
             # Encode audio to base64 immediately (user can preview while processing)
             with open(filepath, 'rb') as audio_file:
@@ -502,9 +541,9 @@ async def evaluate_stream(
             yield f"data: {json.dumps({'type': 'audio_received', 'audio_data': audio_base64, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
             # Step 2: Prepare audio and transcribe (with timestamps for smart chunking)
-            client = AzureSpeechAPI()
-            wav_path, needs_cleanup = client.prepare_audio(filepath)
-            whisper_result = client.transcribe_only(wav_path, language, return_timestamps=True)
+            client = get_azure_client()
+            wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
+            whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
             transcript = whisper_result.get('text', '')
 
             yield f"data: {json.dumps({'type': 'transcription_complete', 'transcript': transcript, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
@@ -513,45 +552,57 @@ async def evaluate_stream(
                 yield f"data: {json.dumps({'type': 'error', 'message': 'No speech detected'})}\n\n"
                 return
 
-            # Step 3: Run Azure and OpenAI in PARALLEL with streaming
-            openai_client = OpenAIEvaluator()
-            azure_future = None
-            openai_futures = {}
+            # Step 3: Run Azure and OpenAI in PARALLEL with streaming (non-blocking)
+            openai_client = get_openai_client()
+            pronunciation_band = 5.0
+            fluency_band = 5.0
 
-            with ThreadPoolExecutor(max_workers=6) as executor:
-                # Start Azure assessment (pass whisper_result to avoid duplicate API call)
-                azure_future = executor.submit(_run_azure_assessment, client, wav_path, transcript, language, whisper_result)
+            # Create all tasks upfront (don't pass client - each thread creates its own)
+            azure_task = asyncio.create_task(
+                asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result)
+            )
 
-                # Start OpenAI criteria evaluations in parallel
-                criteria = ['coherence', 'lexical_resource', 'grammar', 'topic_relevance']
-                for criterion in criteria:
-                    openai_futures[executor.submit(
-                        openai_client._evaluate_single_criterion, criterion, transcript, question
-                    )] = criterion
+            criteria = ['coherence', 'lexical_resource', 'grammar', 'topic_relevance']
+            criterion_tasks = {
+                asyncio.create_task(
+                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question)
+                ): criterion
+                for criterion in criteria
+            }
 
-                # Stream results as they complete
-                pronunciation_band = 5.0
-                fluency_band = 5.0
+            # Stream results as they complete (non-blocking)
+            all_tasks = list(criterion_tasks.keys()) + [azure_task]
 
-                # Check Azure first (usually finishes around same time as OpenAI)
-                all_futures = list(openai_futures.keys()) + [azure_future]
+            for coro in asyncio.as_completed(all_tasks):
+                completed_task = await coro
 
-                for future in as_completed(all_futures):
-                    if future == azure_future:
-                        # Azure completed
-                        azure_result = future.result()
-                        azure_score = calculate_azure_score(azure_result) if azure_result else {}
-                        pronunciation_band = azure_score.get('pronunciation_band', 5.0)
-                        fluency_band = azure_score.get('fluency_band', 5.0)
+                # Find which task completed
+                if azure_task.done() and completed_task == azure_task.result():
+                    azure_result = completed_task
+                    azure_score = calculate_azure_score(azure_result) if azure_result else {}
+                    pronunciation_band = azure_score.get('pronunciation_band', 5.0)
+                    fluency_band = azure_score.get('fluency_band', 5.0)
 
-                        yield f"data: {json.dumps({'type': 'azure_complete', 'azure_result': azure_result, 'azure_scores': {'pronunciation_band': pronunciation_band, 'fluency_band': fluency_band, 'raw_scores': azure_score.get('raw_scores', {})}, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
-                    else:
-                        # OpenAI criterion completed
-                        criterion = openai_futures[future]
-                        _, result = future.result()
-                        openai_result[criterion] = result
+                    yield f"data: {json.dumps({'type': 'azure_complete', 'azure_result': azure_result, 'azure_scores': {'pronunciation_band': pronunciation_band, 'fluency_band': fluency_band, 'raw_scores': azure_score.get('raw_scores', {})}, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
+                else:
+                    # Find which criterion completed
+                    for task, criterion in criterion_tasks.items():
+                        if task.done() and not hasattr(task, '_yielded'):
+                            try:
+                                _, result = task.result()
+                                openai_result[criterion] = result
+                                task._yielded = True
+                                yield f"data: {json.dumps({'type': 'criterion', 'criterion': criterion, 'result': result, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
+                            except Exception:
+                                pass
 
-                        yield f"data: {json.dumps({'type': 'criterion', 'criterion': criterion, 'result': result, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
+            # Ensure azure result is captured if not yet
+            if azure_result is None and azure_task.done():
+                azure_result = azure_task.result()
+                azure_score = calculate_azure_score(azure_result) if azure_result else {}
+                pronunciation_band = azure_score.get('pronunciation_band', 5.0)
+                fluency_band = azure_score.get('fluency_band', 5.0)
+                yield f"data: {json.dumps({'type': 'azure_complete', 'azure_result': azure_result, 'azure_scores': {'pronunciation_band': pronunciation_band, 'fluency_band': fluency_band, 'raw_scores': azure_score.get('raw_scores', {})}, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
             # Step 4: Calculate combined result
             combined_result = openai_client._calculate_combined_result(
@@ -562,7 +613,7 @@ async def evaluate_stream(
 
             # Step 5: Generate improved answer in background (non-blocking for main response)
             try:
-                improved = openai_client._generate_improved_answer(transcript, question, openai_result)
+                improved = await asyncio.to_thread(openai_client._generate_improved_answer, transcript, question, openai_result)
                 if improved:
                     openai_result['improved_answer'] = improved
                     yield f"data: {json.dumps({'type': 'improved_answer', 'result': improved, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
@@ -606,7 +657,7 @@ async def evaluate_stream(
                     pass
 
     return StreamingResponse(
-        generate_sse(),
+        generate_sse_async(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -630,14 +681,12 @@ async def evaluate_scripted(
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text is required for scripted evaluation")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Save to safe path (ASCII only) for Azure SDK compatibility
+    filepath, _ = await save_upload_file_safe(audio)
+    filename = os.path.basename(filepath)
 
     try:
-        with open(filepath, "wb") as buffer:
-            buffer.write(await audio.read())
-
-        results = AzureSpeechAPI().score_text(audio_file_path=filepath, text=text.strip())
+        results = get_azure_client().score_text(audio_file_path=filepath, text=text.strip())
 
         with open(filepath, 'rb') as audio_file:
             audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
@@ -673,16 +722,14 @@ async def evaluate_conversation(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format for texts")
 
-    filename = audio.filename.replace(" ", "_")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    # Save to safe path (ASCII only) for Azure SDK compatibility
+    filepath, _ = await save_upload_file_safe(audio)
+    filename = os.path.basename(filepath)
     wav_filepath = None
 
     try:
-        with open(filepath, "wb") as buffer:
-            buffer.write(await audio.read())
-
-        wav_filepath = convert_to_wav(filepath)
-        results = AzureSpeechAPI().score_text(audio_file_path=wav_filepath, text=" ".join(texts_list).strip())
+        wav_filepath, _ = convert_to_wav(filepath)
+        results = get_azure_client().score_text(audio_file_path=wav_filepath, text=" ".join(texts_list).strip())
 
         with open(filepath, 'rb') as audio_file:
             audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
@@ -750,7 +797,7 @@ class RealtimeSession:
         self.question = question
         self.chunks: List[dict] = []  # List of {audio_data, start_ms, end_ms, result}
         self.total_duration_ms = 0
-        self.azure_client = AzureSpeechAPI()
+        self.azure_client = get_azure_client()
         self.start_time = time_module.time()
         self.is_processing = False
         self.pending_chunks: List[bytes] = []
@@ -768,12 +815,14 @@ class RealtimeSession:
 
     async def process_chunk(self, chunk_index: int) -> dict:
         """Process a single chunk and return Azure result."""
+        from utils.audio import _get_safe_temp_path
+
         chunk = self.chunks[chunk_index]
         if chunk['processed']:
             return chunk['result']
 
-        # Save chunk to temp file
-        temp_path = tempfile.mktemp(suffix='.webm')
+        # Save chunk to temp file - use safe path for Azure SDK compatibility
+        temp_path = _get_safe_temp_path('.webm')
         try:
             with open(temp_path, 'wb') as f:
                 f.write(chunk['audio_data'])
@@ -991,7 +1040,7 @@ async def websocket_realtime_evaluate(websocket: WebSocket):
 
                 if transcript:
                     try:
-                        openai_client = OpenAIEvaluator()
+                        openai_client = get_openai_client()
                         openai_result = openai_client.evaluate_chunked_parallel(
                             transcript=transcript,
                             question=session.question

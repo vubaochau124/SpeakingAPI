@@ -16,7 +16,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     results = relationship("UserResult", back_populates="user")
-    taught_classes = relationship("Class", back_populates="teacher")
+    teaching_assignments = relationship("ClassTeacher", back_populates="teacher")
     class_enrollments = relationship("ClassStudent", back_populates="student")
 
 
@@ -88,12 +88,27 @@ class Class(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
-    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    teacher = relationship("User", back_populates="taught_classes")
+    teachers = relationship("ClassTeacher", back_populates="class_")
     students = relationship("ClassStudent", back_populates="class_")
     assignments = relationship("Assignment", back_populates="class_")
+
+
+class ClassTeacher(Base):
+    __tablename__ = "class_teachers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    class_ = relationship("Class", back_populates="teachers")
+    teacher = relationship("User", back_populates="teaching_assignments")
+
+    __table_args__ = (
+        UniqueConstraint('class_id', 'teacher_id', name='uq_class_teacher'),
+    )
 
 
 class ClassStudent(Base):
@@ -121,6 +136,7 @@ class Assignment(Base):
     question_text = Column(Text, nullable=False)
     requirements = Column(Text, nullable=True)
     instructions = Column(Text, nullable=True)
+    deadline = Column(DateTime(timezone=True), nullable=True)  # Submission deadline
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

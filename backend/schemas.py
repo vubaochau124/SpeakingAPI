@@ -93,13 +93,17 @@ class UserResultResponse(BaseModel):
 class ClassCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    teacher_id: int
+    teacher_ids: List[int]  # Multiple teachers
 
 
 class ClassUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    teacher_id: Optional[int] = None
+    teacher_ids: Optional[List[int]] = None  # Update teachers list
+
+
+class ClassTeacherAdd(BaseModel):
+    teacher_id: int
 
 
 class ClassStudentAdd(BaseModel):
@@ -114,12 +118,18 @@ class ClassStudentResponse(BaseModel):
     enrolled_at: datetime
 
 
+class ClassTeacherResponse(BaseModel):
+    id: int
+    teacher_id: int
+    username: str
+    email: str
+
+
 class ClassResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    teacher_id: int
-    teacher_name: Optional[str] = None
+    teachers: List[ClassTeacherResponse] = []
     student_count: int = 0
     created_at: datetime
 
@@ -131,8 +141,7 @@ class ClassDetailResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    teacher_id: int
-    teacher_name: Optional[str] = None
+    teachers: List[ClassTeacherResponse] = []
     students: List[ClassStudentResponse] = []
     created_at: datetime
 
@@ -147,6 +156,7 @@ class AssignmentCreate(BaseModel):
     question_text: str
     requirements: Optional[str] = None
     instructions: Optional[str] = None
+    deadline: Optional[datetime] = None
 
 
 class AssignmentUpdate(BaseModel):
@@ -154,6 +164,7 @@ class AssignmentUpdate(BaseModel):
     question_text: Optional[str] = None
     requirements: Optional[str] = None
     instructions: Optional[str] = None
+    deadline: Optional[datetime] = None
 
 
 class AssignmentResponse(BaseModel):
@@ -164,10 +175,12 @@ class AssignmentResponse(BaseModel):
     question_text: str
     requirements: Optional[str]
     instructions: Optional[str]
+    deadline: Optional[datetime] = None
     created_by: int
     creator_name: Optional[str] = None
     created_at: datetime
     is_completed: bool = False
+    is_past_deadline: bool = False
     result: Optional[dict] = None
 
     class Config:
