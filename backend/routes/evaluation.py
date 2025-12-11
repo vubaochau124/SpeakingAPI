@@ -191,11 +191,11 @@ def _run_azure_assessment(wav_path, transcript, language='en-US', whisper_result
     client = AzureSpeechAPI()
     return client.assess_pronunciation_chunked(wav_path, transcript, language, whisper_result=whisper_result)
 
-def _run_openai_evaluation(transcript, question):
+def _run_openai_evaluation(transcript, question, language='en-US'):
     """Run OpenAI content evaluation (for parallel execution)"""
     start = time_module.time()
-    print(f"[OPENAI-GPT] Starting content evaluation... (t={start:.2f})", flush=True)
-    result = OpenAIEvaluator().evaluate_chunked_parallel(transcript=transcript, question=question)
+    print(f"[OPENAI-GPT] Starting content evaluation for language={language}... (t={start:.2f})", flush=True)
+    result = OpenAIEvaluator().evaluate_chunked_parallel(transcript=transcript, question=question, language=language)
     elapsed = time_module.time() - start
     print(f"[OPENAI-GPT] Completed ALL content evaluation in {elapsed:.2f}s", flush=True)
     return result
@@ -238,7 +238,7 @@ async def evaluate_audio(
             # Use asyncio.to_thread to run blocking calls without blocking the event loop
             azure_result, openai_eval = await asyncio.gather(
                 asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result),
-                asyncio.to_thread(_run_openai_evaluation, transcript, question)
+                asyncio.to_thread(_run_openai_evaluation, transcript, question, language)
             )
 
         # Cleanup temp WAV
@@ -264,7 +264,7 @@ async def evaluate_audio(
             )
             # Generate improved answer
             try:
-                improved = openai_client._generate_improved_answer(transcript, question, openai_result)
+                improved = openai_client._generate_improved_answer(transcript, question, openai_result, language)
                 openai_result['improved_answer'] = improved
             except Exception:
                 pass
@@ -390,11 +390,14 @@ async def evaluate_openai_only(
     question: Optional[str] = Form(None),
     pronunciation_band: float = Form(5.0),
     fluency_band: float = Form(5.0),
+    language: Optional[str] = Form("en-US"),
     current_user: User = Depends(get_current_user)
 ):
     """OpenAI evaluation endpoint (parallel processing)"""
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript is required")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
     try:
         openai_client = get_openai_client()
@@ -402,7 +405,8 @@ async def evaluate_openai_only(
             transcript=transcript,
             question=question,
             azure_pronunciation_band=pronunciation_band,
-            azure_fluency_band=fluency_band
+            azure_fluency_band=fluency_band,
+            language=language
         )
         return {
             'status': 'openai_complete',
@@ -419,11 +423,14 @@ async def evaluate_openai_streaming(
     question: Optional[str] = Form(None),
     pronunciation_band: float = Form(5.0),
     fluency_band: float = Form(5.0),
+    language: Optional[str] = Form("en-US"),
     current_user: User = Depends(get_current_user)
 ):
     """Streaming OpenAI evaluation - returns results progressively via SSE"""
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript is required")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
     def generate_sse():
         try:
@@ -432,13 +439,14 @@ async def evaluate_openai_streaming(
                 transcript=transcript,
                 question=question,
                 azure_pronunciation_band=pronunciation_band,
-                azure_fluency_band=fluency_band
+                azure_fluency_band=fluency_band,
+                language=language
             ):
                 yield f"data: {json.dumps(chunk)}\n\n"
                 if chunk.get('type') == 'complete':
                     try:
                         improved = openai_client.generate_improved_answer_async(
-                            transcript, question, chunk.get('openai_result', {})
+                            transcript, question, chunk.get('openai_result', {}), language
                         )
                         yield f"data: {json.dumps({'type': 'improved_answer', 'result': improved})}\n\n"
                     except Exception:
@@ -565,7 +573,7 @@ async def evaluate_stream(
             criteria = ['coherence', 'lexical_resource', 'grammar', 'topic_relevance']
             criterion_tasks = {
                 asyncio.create_task(
-                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question)
+                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question, language)
                 ): criterion
                 for criterion in criteria
             }
@@ -613,7 +621,7 @@ async def evaluate_stream(
 
             # Step 5: Generate improved answer in background (non-blocking for main response)
             try:
-                improved = await asyncio.to_thread(openai_client._generate_improved_answer, transcript, question, openai_result)
+                improved = await asyncio.to_thread(openai_client._generate_improved_answer, transcript, question, openai_result, language)
                 if improved:
                     openai_result['improved_answer'] = improved
                     yield f"data: {json.dumps({'type': 'improved_answer', 'result': improved, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
@@ -1043,7 +1051,8 @@ async def websocket_realtime_evaluate(websocket: WebSocket):
                         openai_client = get_openai_client()
                         openai_result = openai_client.evaluate_chunked_parallel(
                             transcript=transcript,
-                            question=session.question
+                            question=session.question,
+                            language=session.language
                         )
                         combined_result = openai_client._calculate_combined_result(
                             openai_result,

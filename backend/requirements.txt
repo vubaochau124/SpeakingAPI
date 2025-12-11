@@ -1,17 +1,29 @@
+# Web framework
 fastapi
 uvicorn[standard]
 python-multipart
-requests
+
+# Environment
 python-dotenv
-gunicorn
+
+# AI APIs
 openai
 azure-cognitiveservices-speech
+
+# Audio processing
 pydub
 noisereduce
 scipy
 numpy
+eng-to-ipa
+
+# Database
 sqlalchemy
 psycopg2-binary
+
+# Authentication
 python-jose[cryptography]
 bcrypt
+
+# Validation
 email-validator
