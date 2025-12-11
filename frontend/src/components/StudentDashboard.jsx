@@ -469,6 +469,7 @@ function StudentDashboard({ onStartPractice }) {
                           <Transcript
                             transcript={result.transcript || result.azure_result?.speech_score?.transcript}
                             wordList={result.azure_result.speech_score.word_score_list}
+                            language={result.azure_result?.speech_score?.detected_dialect?.lang_id}
                           />
                         ) : (
                           <div>

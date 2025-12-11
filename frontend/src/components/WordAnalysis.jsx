@@ -7,8 +7,11 @@ import {
   getPhonemeScore
 } from '../utils/azureWordUtils';
 
-function WordAnalysis({ wordList }) {
+function WordAnalysis({ wordList, language = 'en-US' }) {
   const [selectedWord, setSelectedWord] = useState(null);
+
+  // Only show phonemes for English
+  const showPhonemes = language?.startsWith('en');
 
   const getScoreColor = (score) => {
     if (score >= 90) return 'text-emerald-400';
@@ -60,10 +63,6 @@ function WordAnalysis({ wordList }) {
       {/* Selected Word Details */}
       {selectedWord && (
         <div className="mt-6 border-t border-slate-700/50 pt-6">
-          <h3 className="text-xl font-semibold text-white mb-4">
-            Phoneme Analysis
-          </h3>
-
           {/* Word Header */}
           <div className="mb-4 pb-4 border-b border-slate-700/50">
             <h4 className="text-2xl font-bold text-white">
@@ -75,48 +74,59 @@ function WordAnalysis({ wordList }) {
             </p>
           </div>
 
-          {/* Phonemes */}
-          <div className="space-y-3">
-            {getPhonemes(selectedWord).map((phone, index) => {
-              const phoneScore = getPhonemeScore(phone);
-              return (
-                <div
-                  key={index}
-                  className={`rounded-xl p-4 border ${getScoreBorderColor(phoneScore)} ${getScoreBgColor(phoneScore)} hover:translate-x-2 transition-all duration-300`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="text-sm text-slate-400 mb-1">
-                        Phoneme {index + 1}
-                      </div>
-                      <div className="text-2xl font-bold text-cyan-400 mb-2">
-                        /{getPhonemeText(phone)}/
-                      </div>
-                      <div className="text-sm">
-                        <span className="text-slate-400">Score:</span>
-                        <span
-                          className={`font-semibold ml-1 ${getScoreColor(phoneScore)}`}
-                        >
-                          {phoneScore}
-                        </span>
+          {/* Phonemes - Only for English */}
+          {showPhonemes ? (
+            <>
+              <h3 className="text-xl font-semibold text-white mb-4">
+                Phoneme Analysis
+              </h3>
+              <div className="space-y-3">
+                {getPhonemes(selectedWord).map((phone, index) => {
+                  const phoneScore = getPhonemeScore(phone);
+                  return (
+                    <div
+                      key={index}
+                      className={`rounded-xl p-4 border ${getScoreBorderColor(phoneScore)} ${getScoreBgColor(phoneScore)} hover:translate-x-2 transition-all duration-300`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="text-sm text-slate-400 mb-1">
+                            Phoneme {index + 1}
+                          </div>
+                          <div className="text-2xl font-bold text-cyan-400 mb-2">
+                            /{getPhonemeText(phone)}/
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-slate-400">Score:</span>
+                            <span
+                              className={`font-semibold ml-1 ${getScoreColor(phoneScore)}`}
+                            >
+                              {phoneScore}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div
+                            className={`w-16 h-16 rounded-full border-2 ${getScoreBorderColor(phoneScore)} ${getScoreBgColor(phoneScore)} flex items-center justify-center`}
+                          >
+                            <span
+                              className={`text-2xl font-bold ${getScoreColor(phoneScore)}`}
+                            >
+                              {phoneScore}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="ml-4">
-                      <div
-                        className={`w-16 h-16 rounded-full border-2 ${getScoreBorderColor(phoneScore)} ${getScoreBgColor(phoneScore)} flex items-center justify-center`}
-                      >
-                        <span
-                          className={`text-2xl font-bold ${getScoreColor(phoneScore)}`}
-                        >
-                          {phoneScore}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p className="text-slate-400 text-sm">
+              Phoneme analysis is only available for English.
+            </p>
+          )}
         </div>
       )}
     </div>

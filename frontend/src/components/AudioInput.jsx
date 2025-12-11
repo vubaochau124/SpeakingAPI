@@ -106,11 +106,7 @@ function AudioInput({
         setAudioUrl(URL.createObjectURL(audioBlob));
 
         stream.getTracks().forEach(track => track.stop());
-        setRecordStatus('Sending for evaluation...');
-
-        // Auto submit - same as upload file
-        const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-        onEvaluate(audioFile, question, language);
+        setRecordStatus('Recording complete. Click "Evaluate" when ready.');
       };
 
       mediaRecorderRef.current.start(500);
@@ -237,7 +233,7 @@ function AudioInput({
                 : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700'
             } text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
           >
-            {isRecording ? '⏹ Stop & Evaluate' : '🎙 Start Recording'}
+            {isRecording ? '⏹ Stop Recording' : '🎙 Start Recording'}
           </button>
           {recordStatus && (
             <p className={`mt-3 text-sm ${
@@ -283,14 +279,14 @@ function AudioInput({
         </div>
       )}
 
-      {/* Submit Button - Only show for uploaded files (recording auto-evaluates) */}
-      {uploadedFile && (
+      {/* Submit Button - Show for both recorded and uploaded audio */}
+      {hasAudio && !isRecording && (
         <button
           onClick={handleSubmit}
           disabled={!hasAudio || loading || isRecording}
-          className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-cyan-500/25"
+          className="w-full py-4 bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-600 hover:to-cyan-700 text-white font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg shadow-emerald-500/25"
         >
-          {buttonText}
+          {loading ? '⏳ Evaluating...' : `✨ ${buttonText}`}
         </button>
       )}
     </div>

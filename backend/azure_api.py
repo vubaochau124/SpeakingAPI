@@ -375,6 +375,70 @@ class AzureSpeechAPI:
             'ending_punctuation': ''
         }
 
+    def _is_cjk_language(self, language):
+        """Check if the language is CJK (Chinese, Japanese, Korean)."""
+        cjk_prefixes = ['ja', 'zh', 'ko', 'cmn', 'yue']  # Japanese, Chinese, Korean, Mandarin, Cantonese
+        lang_prefix = language.split('-')[0].lower()
+        return lang_prefix in cjk_prefixes
+
+    def _filter_overlapping_words(self, words, language='en-US'):
+        """Filter out overlapping/duplicate words for CJK languages.
+
+        Azure Speech SDK often returns fragmented words for CJK languages
+        where subsequent words are substrings or overlapping portions of
+        previous words. This function removes such duplicates.
+
+        Args:
+            words: List of word dicts from Azure
+            language: Language code
+
+        Returns:
+            list: Filtered word list without overlapping duplicates
+        """
+        if not words or not self._is_cjk_language(language):
+            return words
+
+        filtered = []
+        prev_word = None
+        prev_offset = -1
+        prev_end = -1
+
+        for word in words:
+            word_text = word.get('Word', '')
+            offset = word.get('Offset', 0)
+            duration = word.get('Duration', 0)
+            word_end = offset + duration
+
+            # Skip if this word overlaps significantly with the previous word's time range
+            # or if this word's text is a substring of the previous word
+            should_skip = False
+
+            if prev_word and prev_offset >= 0:
+                prev_text = prev_word.get('Word', '')
+
+                # Check if current word is a substring of previous word
+                if word_text and prev_text and word_text in prev_text:
+                    should_skip = True
+                    print(f"[AZURE-FILTER] Skipping '{word_text}' (substring of '{prev_text}')")
+
+                # Check if there's significant time overlap (more than 50% of current word)
+                elif prev_end > offset:
+                    overlap = prev_end - offset
+                    if duration > 0 and overlap > duration * 0.5:
+                        should_skip = True
+                        print(f"[AZURE-FILTER] Skipping '{word_text}' (time overlap with '{prev_text}')")
+
+            if not should_skip:
+                filtered.append(word)
+                prev_word = word
+                prev_offset = offset
+                prev_end = word_end
+
+        if len(filtered) != len(words):
+            print(f"[AZURE-FILTER] Filtered {len(words)} -> {len(filtered)} words for {language}")
+
+        return filtered
+
     def _calculate_fluency_metrics(self, all_words, audio_duration_sec):
         """Calculate fluency metrics from all words"""
         total_syllables = 0
@@ -531,10 +595,13 @@ class AzureSpeechAPI:
             }
             print(f"[AZURE] Completed in {elapsed:.2f}s. Words: {len(all_words)}, Scores: {final_scores}")
 
+            # Filter overlapping words for CJK languages
+            filtered_words = self._filter_overlapping_words(all_words, language)
+
             azure_result = {
                 'timestamp': datetime.now().strftime('%Y%m%d_%H%M%S'),
                 'transcript': ' '.join(all_transcripts),
-                'words': all_words,
+                'words': filtered_words,
                 'results': all_results,
                 'scores': final_scores,
                 'duration_sec': total_duration / 10000000 if total_duration else 5

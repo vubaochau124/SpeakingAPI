@@ -448,6 +448,7 @@ function MainApp() {
                             transcript={unscriptedResults.speech_score.transcript}
                             wordList={unscriptedResults.speech_score.word_score_list}
                             audioData={unscriptedResults.audio_data}
+                            language={unscriptedResults.speech_score?.detected_dialect?.lang_id}
                           />
                         ) : (
                           <div>

@@ -326,6 +326,7 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
                     transcript={results.speech_score.transcript}
                     wordList={results.speech_score.word_score_list}
                     audioData={results.audio_data}
+                    language={results.speech_score?.detected_dialect?.lang_id}
                   />
                 ) : (
                   <div>

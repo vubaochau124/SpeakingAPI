@@ -62,6 +62,7 @@ class OpenAIEvaluator:
 
         system_prompt = prompts.get(criterion)
         if not system_prompt:
+            print(f"[OPENAI-GPT] WARNING: No prompt found for {criterion} in {language}. Available: {list(prompts.keys())}", flush=True)
             return (criterion, None)
 
         user_prompt = f'TRANSCRIPT: "{transcript}"'
@@ -107,7 +108,7 @@ class OpenAIEvaluator:
             dict: Improved answer with explanation
         """
         prompts = self._get_prompts_for_language(language)
-        improvement_system_prompt = prompts.get('improvement', IMPROVEMENT_PROMPT)
+        improvement_system_prompt = prompts.get('improvement', PROMPTS_EN.get('improvement'))
         grammar_errors = evaluation.get('grammar', {}).get('errors', [])
         coherence_band = evaluation.get('coherence', {}).get('band', 'N/A')
         lexical_band = evaluation.get('lexical_resource', {}).get('band', 'N/A')

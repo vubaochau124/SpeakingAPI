@@ -13,8 +13,11 @@ import {
   getSyllablePlaybackTiming
 } from '../utils/azureWordUtils';
 
-function Transcript({ transcript, wordList, audioData }) {
+function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
   const [selectedWord, setSelectedWord] = useState(null);
+
+  // Only show phonemes for English
+  const showPhonemes = language?.startsWith('en');
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -105,10 +108,16 @@ function Transcript({ transcript, wordList, audioData }) {
     }
 
     // Azure raw format doesn't include stress info, just concatenate syllables
+    // Don't pass wordInfo to getSyllableText to avoid repeating the word for each empty syllable
     let result = '';
     for (const syllable of syllables) {
-      result += getSyllableText(syllable, wordInfo);
+      const syllableText = getSyllableText(syllable);
+      // Only add if syllable has actual text
+      if (syllableText) {
+        result += syllableText;
+      }
     }
+    // If no syllable text was found, return the original word
     return result || getWord(wordInfo);
   };
 
@@ -181,12 +190,12 @@ function Transcript({ transcript, wordList, audioData }) {
               </button>
             )}
 
-            {/* Syllables */}
-            {getSyllables(selectedWord).length > 0 && (
+            {/* Syllables - only show if syllables have text */}
+            {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).length > 0 && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables (click to hear)</h4>
                 <div className="flex flex-wrap gap-2">
-                  {getSyllables(selectedWord).map((syl, i) => {
+                  {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).map((syl, i) => {
                     const syllableScore = getSyllableScore(syl);
                     return (
                       <button
@@ -202,7 +211,7 @@ function Transcript({ transcript, wordList, audioData }) {
                         }`}
                       >
                         <span className="text-white font-medium">
-                          {getSyllableText(syl, selectedWord)}
+                          {getSyllableText(syl)}
                         </span>
                         <span className={`ml-2 text-sm ${getScoreColor(syllableScore)}`}>
                           {formatScore(syllableScore)}
@@ -215,8 +224,8 @@ function Transcript({ transcript, wordList, audioData }) {
               </div>
             )}
 
-            {/* Phonemes Table */}
-            {getPhonemes(selectedWord).length > 0 && (
+            {/* Phonemes Table - Only for English */}
+            {showPhonemes && getPhonemes(selectedWord).length > 0 && (
               <div className="overflow-y-auto max-h-64">
                 <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes</h4>
                 <table className="w-full">

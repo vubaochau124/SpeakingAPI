@@ -207,7 +207,7 @@ function FeedbackDetails({ openaiResult, combinedResult, fluencyMetrics, title =
           <div>
             <h3 className="text-2xl font-bold text-white">{title}</h3>
             <p className="text-slate-400 text-sm">
-              IELTS Band Assessment (1.0-9.0)
+              Band Assessment (1.0-9.0)
               {isLoading && (
                 <span className="ml-2 inline-flex items-center text-cyan-400">
                   <svg className="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">

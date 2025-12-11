@@ -24,6 +24,10 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
   const audioContextRef = useRef(null);
   const audioBufferRef = useRef(null);
 
+  // Get language and determine if phonemes should be shown
+  const language = textScore?.detected_dialect?.lang_id || 'en-US';
+  const showPhonemes = language?.startsWith('en');
+
   // Load audio buffer when results change
   useEffect(() => {
     if (results?.audio_data) {
@@ -120,10 +124,16 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
     }
 
     // Azure raw format doesn't include stress info, just concatenate syllables
+    // Don't pass wordInfo to getSyllableText to avoid repeating the word for each empty syllable
     let result = '';
     for (const syllable of syllables) {
-      result += getSyllableText(syllable, wordInfo);
+      const syllableText = getSyllableText(syllable);
+      // Only add if syllable has actual text
+      if (syllableText) {
+        result += syllableText;
+      }
     }
+    // If no syllable text was found, return the original word
     return result || getWord(wordInfo);
   };
 
@@ -392,12 +402,12 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
               </button>
             )}
 
-            {/* Syllables */}
-            {getSyllables(selectedWord).length > 0 && (
+            {/* Syllables - only show if syllables have text */}
+            {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).length > 0 && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables (click to hear)</h4>
                 <div className="flex flex-wrap gap-2">
-                  {getSyllables(selectedWord).map((syl, i) => {
+                  {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).map((syl, i) => {
                     const syllableScore = getSyllableScore(syl);
                     return (
                       <button
@@ -407,7 +417,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                         className={`px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${getWordBgColor(syllableScore)}`}
                       >
                         <span className="text-white font-medium">
-                          {getSyllableText(syl, selectedWord)}
+                          {getSyllableText(syl)}
                         </span>
                         <span className={`ml-2 text-sm ${getScoreColor(syllableScore)}`}>
                           {formatScore(syllableScore)}
@@ -420,8 +430,8 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
               </div>
             )}
 
-            {/* Phonemes Table */}
-            {getPhonemes(selectedWord).length > 0 && (
+            {/* Phonemes Table - Only for English */}
+            {showPhonemes && getPhonemes(selectedWord).length > 0 && (
               <div className="overflow-y-auto max-h-64">
                 <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes (click to hear)</h4>
                 <table className="w-full">
