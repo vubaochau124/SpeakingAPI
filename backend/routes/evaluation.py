@@ -207,10 +207,15 @@ async def evaluate_audio(
     question: Optional[str] = Form(None),
     question_id: Optional[int] = Form(None),
     language: Optional[str] = Form("en-US"),
+    chunk_transcripts: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Evaluate audio: Whisper transcription first, then Azure + OpenAI in parallel"""
+    """Evaluate audio: Whisper transcription first, then Azure + OpenAI in parallel
+
+    If chunk_transcripts is provided (JSON array from real-time recording),
+    skip Whisper API call and use the pre-transcribed chunks instead.
+    """
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No file selected")
     if not allowed_file(audio.filename):
@@ -223,12 +228,45 @@ async def evaluate_audio(
     filename = os.path.basename(filepath)
 
     try:
-        # Step 1: Prepare audio and get transcript with timestamps (Whisper - single call)
-        # Run blocking operations in thread pool to not block event loop
+        # Step 1: Prepare audio and get transcript
         client = get_azure_client()
         wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
-        whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
-        transcript = whisper_result.get('text', '')
+
+        # Check if we have pre-transcribed chunks from real-time recording
+        whisper_result = None
+        transcript = ''
+
+        if chunk_transcripts:
+            try:
+                chunks_data = json.loads(chunk_transcripts)
+                if chunks_data and isinstance(chunks_data, list):
+                    # Merge chunk transcripts into full transcript
+                    transcript = ' '.join(c.get('transcript', '') for c in chunks_data if c.get('transcript'))
+                    # Build whisper_result format for Azure chunked assessment
+                    words = []
+                    for chunk in chunks_data:
+                        chunk_text = chunk.get('transcript', '')
+                        start_time = chunk.get('startTime', 0)
+                        end_time = chunk.get('endTime', 0)
+                        # Approximate word timestamps within chunk
+                        chunk_words = chunk_text.split()
+                        if chunk_words and end_time > start_time:
+                            word_duration = (end_time - start_time) / len(chunk_words)
+                            for i, word in enumerate(chunk_words):
+                                words.append({
+                                    'word': word,
+                                    'start': start_time + i * word_duration,
+                                    'end': start_time + (i + 1) * word_duration
+                                })
+                    whisper_result = {'text': transcript, 'words': words}
+                    print(f"[EVALUATE] Using {len(chunks_data)} pre-transcribed chunks (saved Whisper API call)", flush=True)
+            except json.JSONDecodeError:
+                print(f"[EVALUATE] Invalid chunk_transcripts JSON, falling back to Whisper", flush=True)
+
+        # Fall back to Whisper if no valid pre-transcribed chunks
+        if not transcript:
+            whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
+            transcript = whisper_result.get('text', '')
 
         # Step 2: Run Azure and OpenAI in PARALLEL (non-blocking)
         azure_result = None
@@ -496,10 +534,14 @@ async def evaluate_stream(
     question: Optional[str] = Form(None),
     question_id: Optional[int] = Form(None),
     language: Optional[str] = Form("en-US"),
+    chunk_transcripts: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
     """
     Optimized streaming endpoint - returns results progressively via SSE.
+
+    If chunk_transcripts is provided (JSON array from real-time recording),
+    skip Whisper API call and use the pre-transcribed chunks instead.
 
     Flow:
     1. Stream: audio_received
@@ -540,11 +582,44 @@ async def evaluate_stream(
 
             yield f"data: {json.dumps({'type': 'audio_received', 'audio_data': audio_base64, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
-            # Step 2: Prepare audio and transcribe (with timestamps for smart chunking)
+            # Step 2: Prepare audio and get transcript
             client = get_azure_client()
             wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
-            whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
-            transcript = whisper_result.get('text', '')
+
+            # Check if we have pre-transcribed chunks from real-time recording
+            whisper_result = None
+
+            if chunk_transcripts:
+                try:
+                    chunks_data = json.loads(chunk_transcripts)
+                    if chunks_data and isinstance(chunks_data, list):
+                        # Merge chunk transcripts into full transcript
+                        transcript = ' '.join(c.get('transcript', '') for c in chunks_data if c.get('transcript'))
+                        # Build whisper_result format for Azure chunked assessment
+                        words = []
+                        for chunk in chunks_data:
+                            chunk_text = chunk.get('transcript', '')
+                            start_time_chunk = chunk.get('startTime', 0)
+                            end_time_chunk = chunk.get('endTime', 0)
+                            # Approximate word timestamps within chunk
+                            chunk_words = chunk_text.split()
+                            if chunk_words and end_time_chunk > start_time_chunk:
+                                word_duration = (end_time_chunk - start_time_chunk) / len(chunk_words)
+                                for i, word in enumerate(chunk_words):
+                                    words.append({
+                                        'word': word,
+                                        'start': start_time_chunk + i * word_duration,
+                                        'end': start_time_chunk + (i + 1) * word_duration
+                                    })
+                        whisper_result = {'text': transcript, 'words': words}
+                        print(f"[STREAM] Using {len(chunks_data)} pre-transcribed chunks (saved Whisper API call)", flush=True)
+                except json.JSONDecodeError:
+                    print(f"[STREAM] Invalid chunk_transcripts JSON, falling back to Whisper", flush=True)
+
+            # Fall back to Whisper if no valid pre-transcribed chunks
+            if not transcript:
+                whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
+                transcript = whisper_result.get('text', '')
 
             yield f"data: {json.dumps({'type': 'transcription_complete', 'transcript': transcript, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
@@ -914,6 +989,67 @@ class RealtimeSession:
             '_chunk_count': len(self.chunks),
             '_total_duration_ms': self.total_duration_ms
         }
+
+
+@router.post("/transcribe-chunk")
+async def transcribe_audio_chunk(
+    audio: UploadFile = File(...),
+    language: Optional[str] = Form("en-US"),
+    chunk_index: Optional[int] = Form(0),
+    start_time: Optional[float] = Form(0),
+    end_time: Optional[float] = Form(0),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Transcribe a single audio chunk using Whisper API.
+    This endpoint is called every 5 seconds during recording for real-time transcription.
+    """
+    if not audio.filename:
+        raise HTTPException(status_code=400, detail="No file selected")
+    if not allowed_file(audio.filename):
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
+
+    # Save to safe path (ASCII only) for compatibility
+    filepath, _ = await save_upload_file_safe(audio)
+
+    try:
+        start = time_module.time()
+        print(f"[CHUNK-{chunk_index}] Received chunk {start_time:.1f}s-{end_time:.1f}s", flush=True)
+
+        # Prepare audio and transcribe
+        client = get_azure_client()
+        wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
+        transcript = await asyncio.to_thread(client.transcribe_only, wav_path, language)
+
+        # Cleanup
+        if needs_cleanup and os.path.exists(wav_path):
+            try:
+                os.remove(wav_path)
+            except Exception:
+                pass
+
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+        elapsed = time_module.time() - start
+        print(f"[CHUNK-{chunk_index}] Transcribed in {elapsed:.2f}s: '{transcript[:100]}'", flush=True)
+
+        return {
+            'status': 'success',
+            'chunk_index': chunk_index,
+            'transcript': transcript,
+            'start_time': start_time,
+            'end_time': end_time,
+            'processing_time': round(elapsed, 2)
+        }
+
+    except Exception as e:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        print(f"[CHUNK-{chunk_index}] Error: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.websocket("/ws/evaluate-realtime")

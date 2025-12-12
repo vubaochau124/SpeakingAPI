@@ -83,7 +83,7 @@ function MainApp() {
     }
   };
 
-  const handleUnscriptedEvaluate = async (audioFile, question = '', language = 'en-US') => {
+  const handleUnscriptedEvaluate = async (audioFile, question = '', language = 'en-US', chunkTranscripts = null) => {
     // Start timing from button click
     const startTime = performance.now();
     const logTime = (label) => {
@@ -107,6 +107,11 @@ function MainApp() {
     formData.append('language', language);
     if (question.trim()) {
       formData.append('question', question.trim());
+    }
+    // Include pre-transcribed chunks if available (from real-time recording)
+    if (chunkTranscripts && chunkTranscripts.length > 0) {
+      formData.append('chunk_transcripts', JSON.stringify(chunkTranscripts));
+      logTime(`📝 Including ${chunkTranscripts.length} pre-transcribed chunks (skipping Whisper)`);
     }
 
     try {
