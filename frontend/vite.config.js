@@ -4,10 +4,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 6969,
+    allowedHosts: ['verify-certificate.sotatek.works'], // <-- thêm domain ở đây
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://127.0.0.1:5000',
+        target: process.env.VITE_API_URL || 'http://127.0.0.1:8001',
         changeOrigin: true,
         secure: false,
         ws: true,
