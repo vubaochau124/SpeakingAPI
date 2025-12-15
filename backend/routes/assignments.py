@@ -18,6 +18,7 @@ from auth import get_current_user
 from dependencies import require_teacher
 from utils.audio import allowed_file, AUDIO_FOLDER, get_mime_type, _get_safe_temp_path
 from utils.scoring import calculate_azure_score
+from utils.assessment_logger import log_assessment
 from azure_api import AzureSpeechAPI
 from openai_evaluator import OpenAIEvaluator
 
@@ -443,6 +444,20 @@ async def submit_assignment(
         db.add(assignment_result)
         db.commit()
         db.refresh(assignment_result)
+
+        # Log assessment to file
+        log_assessment(
+            user_id=current_user.id,
+            username=current_user.username,
+            assessment_type='assignment',
+            question=assignment.question_text,
+            transcript=db_transcript,
+            azure_result=azure_result,
+            openai_result=openai_result,
+            combined_result=combined_result,
+            scores=scores_data,
+            extra_data={'assignment_id': assignment_id, 'assignment_title': assignment.title}
+        )
 
         return {
             'speech_score': azure_result.get('speech_score', {}) if azure_result else {},

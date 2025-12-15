@@ -175,8 +175,8 @@ function AudioInput({
     setChunkedTranscripts(prev => [...prev, { chunkIndex, transcript, startTime, endTime }]);
   };
 
-  const handleChunkedRecordingComplete = (allChunks, fullAudioBlob) => {
-    console.log('Recording complete with', allChunks.length, 'chunks');
+  const handleChunkedRecordingComplete = (allChunks, fullAudioBlob, transcripts) => {
+    console.log('Recording complete with', allChunks.length, 'chunks,', transcripts.length, 'transcripts');
     setRecordedBlob(fullAudioBlob);
     setUploadedFile(null);
 
@@ -185,12 +185,14 @@ function AudioInput({
 
     setRecordStatus('Processing complete! Sending for final evaluation...');
 
-    // Build chunk transcripts from collected data
-    const chunkTranscriptsData = chunkedTranscripts.map(ct => ({
+    // Use transcripts passed directly from ChunkedAudioRecorder (already sorted)
+    const chunkTranscriptsData = transcripts.map(ct => ({
       transcript: ct.transcript,
       startTime: ct.startTime,
       endTime: ct.endTime
     }));
+
+    console.log('Sending chunk transcripts:', chunkTranscriptsData);
 
     // Auto submit with the full audio and pre-transcribed chunks
     const audioFile = new File([fullAudioBlob], 'recording.webm', { type: 'audio/webm' });

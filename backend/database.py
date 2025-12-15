@@ -115,26 +115,71 @@ def run_migrations():
                 print(f"Migration warning: {e}")
 
 
+def get_file_hash(filepath):
+    """Calculate MD5 hash of a file to detect changes."""
+    import hashlib
+    if not os.path.exists(filepath):
+        return None
+    with open(filepath, 'rb') as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def get_hash_file_path():
+    """Get path to the file that stores content hashes."""
+    base_path = os.path.dirname(os.path.dirname(__file__))
+    return os.path.join(base_path, 'database', '.content_hashes.json')
+
+
+def load_stored_hashes():
+    """Load previously stored file hashes."""
+    import json
+    hash_file = get_hash_file_path()
+    if os.path.exists(hash_file):
+        with open(hash_file, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_hashes(hashes):
+    """Save file hashes to track changes."""
+    import json
+    hash_file = get_hash_file_path()
+    with open(hash_file, 'w') as f:
+        json.dump(hashes, f)
+
+
 def seed_content():
-    """Seed questions and conversations from JSON files if database is empty."""
-    import os
+    """Seed questions and conversations from JSON files. Re-seeds if files have changed."""
     import json
     from models import Topic, Question, Conversation, ConversationLine
 
+    # Get path to JSON files
+    base_path = os.path.dirname(os.path.dirname(__file__))
+    questions_path = os.path.join(base_path, 'database', 'questionaire.json')
+    conversations_path = os.path.join(base_path, 'database', 'conversation.json')
+
+    # Calculate current file hashes
+    current_hashes = {
+        'questions': get_file_hash(questions_path),
+        'conversations': get_file_hash(conversations_path)
+    }
+    stored_hashes = load_stored_hashes()
+
     db = SessionLocal()
     try:
-        # Check if data already exists
-        if db.query(Question).count() > 0:
-            print("Questions already seeded, skipping...")
-            return
+        # Check if questions need to be reseeded
+        questions_changed = current_hashes['questions'] != stored_hashes.get('questions')
+        has_questions = db.query(Question).count() > 0
 
-        # Get path to JSON files
-        base_path = os.path.dirname(os.path.dirname(__file__))
-        questions_path = os.path.join(base_path, 'database', 'questionaire.json')
-        conversations_path = os.path.join(base_path, 'database', 'conversation.json')
+        if has_questions and not questions_changed:
+            print("Questions already seeded and unchanged, skipping...")
+        elif os.path.exists(questions_path):
+            if has_questions and questions_changed:
+                print("Questions file changed, reseeding...")
+                # Delete existing questions (topics are kept as they might be referenced elsewhere)
+                db.query(Question).delete()
+                db.commit()
 
-        # Seed questions
-        if os.path.exists(questions_path):
             with open(questions_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
@@ -160,8 +205,20 @@ def seed_content():
             db.commit()
             print(f"Seeded {len(questions_data)} questions")
 
-        # Seed conversations
-        if os.path.exists(conversations_path):
+        # Check if conversations need to be reseeded
+        conversations_changed = current_hashes['conversations'] != stored_hashes.get('conversations')
+        has_conversations = db.query(Conversation).count() > 0
+
+        if has_conversations and not conversations_changed:
+            print("Conversations already seeded and unchanged, skipping...")
+        elif os.path.exists(conversations_path):
+            if has_conversations and conversations_changed:
+                print("Conversations file changed, reseeding...")
+                # Delete existing conversations and their lines
+                db.query(ConversationLine).delete()
+                db.query(Conversation).delete()
+                db.commit()
+
             with open(conversations_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
@@ -183,6 +240,9 @@ def seed_content():
 
             db.commit()
             print(f"Seeded {len(data)} conversations")
+
+        # Save current hashes for future comparisons
+        save_hashes(current_hashes)
 
     except Exception as e:
         print(f"Seed error: {e}")

@@ -37,6 +37,8 @@ function ChunkedAudioRecorder({
   const recordingStartTimeRef = useRef(0);
   const chunkStartTimeRef = useRef(0);
   const timerIntervalRef = useRef(null);
+  const pendingTranscriptionsRef = useRef([]);  // Track pending transcription promises
+  const transcribedChunksRef = useRef([]);  // Store transcripts in ref for reliable access
 
   // Cleanup on unmount
   useEffect(() => {
@@ -76,69 +78,83 @@ function ChunkedAudioRecorder({
     animationFrameRef.current = requestAnimationFrame(analyzeAudioLevel);
   };
 
-  // Send chunk to backend for transcription
-  const sendChunkForTranscription = async (chunkBlob, chunkIndex, startTime, endTime) => {
-    try {
-      console.log(`[Chunk ${chunkIndex}] Sending for transcription (${startTime.toFixed(1)}s - ${endTime.toFixed(1)}s, ${chunkBlob.size} bytes)`);
+  // Send chunk to backend for transcription (returns promise for tracking)
+  const sendChunkForTranscription = (chunkBlob, chunkIndex, startTime, endTime) => {
+    const transcriptionPromise = (async () => {
+      try {
+        console.log(`[Chunk ${chunkIndex}] Sending for transcription (${startTime.toFixed(1)}s - ${endTime.toFixed(1)}s, ${chunkBlob.size} bytes)`);
 
-      const formData = new FormData();
-      formData.append('audio', chunkBlob, `chunk_${chunkIndex}.webm`);
-      formData.append('language', language);
-      formData.append('chunk_index', chunkIndex);
-      formData.append('start_time', startTime);
-      formData.append('end_time', endTime);
+        const formData = new FormData();
+        formData.append('audio', chunkBlob, `chunk_${chunkIndex}.webm`);
+        formData.append('language', language);
+        formData.append('chunk_index', chunkIndex);
+        formData.append('start_time', startTime);
+        formData.append('end_time', endTime);
 
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: formData
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
 
-      const result = await response.json();
-      const transcript = result.transcript || '';
+        const result = await response.json();
+        const transcript = result.transcript || '';
 
-      console.log(`[Chunk ${chunkIndex}] Transcription received: "${transcript}"`);
+        console.log(`[Chunk ${chunkIndex}] Transcription received: "${transcript}"`);
 
-      // Update transcribed chunks
-      setTranscribedChunks(prev => [
-        ...prev,
-        {
+        const chunkData = {
           index: chunkIndex,
           transcript,
           startTime,
           endTime,
           duration: endTime - startTime
+        };
+
+        // Store in ref for reliable access when recording completes
+        transcribedChunksRef.current.push(chunkData);
+
+        // Update state for UI display
+        setTranscribedChunks(prev => [...prev, chunkData]);
+
+        // Callback to parent
+        if (onChunkTranscribed) {
+          onChunkTranscribed(chunkIndex, transcript, startTime, endTime);
         }
-      ]);
 
-      // Callback to parent
-      if (onChunkTranscribed) {
-        onChunkTranscribed(chunkIndex, transcript, startTime, endTime);
-      }
+        return chunkData;
 
-    } catch (error) {
-      console.error(`[Chunk ${chunkIndex}] Transcription error:`, error);
+      } catch (error) {
+        console.error(`[Chunk ${chunkIndex}] Transcription error:`, error);
 
-      // Still add to UI but mark as error
-      setTranscribedChunks(prev => [
-        ...prev,
-        {
+        const errorData = {
           index: chunkIndex,
-          transcript: `[Error: ${error.message}]`,
+          transcript: '',  // Empty transcript on error
           startTime,
           endTime,
           duration: endTime - startTime,
           error: true
-        }
-      ]);
-    }
+        };
+
+        // Store in ref even on error
+        transcribedChunksRef.current.push(errorData);
+
+        // Still add to UI but mark as error
+        setTranscribedChunks(prev => [...prev, { ...errorData, transcript: `[Error: ${error.message}]` }]);
+
+        return errorData;
+      }
+    })();
+
+    // Track the promise
+    pendingTranscriptionsRef.current.push(transcriptionPromise);
+    return transcriptionPromise;
   };
 
   // Process accumulated chunk data - restart recorder to get complete WebM file
@@ -245,6 +261,8 @@ function ChunkedAudioRecorder({
       // Reset state
       allChunksRef.current = [];
       currentChunkRef.current = [];
+      pendingTranscriptionsRef.current = [];
+      transcribedChunksRef.current = [];
       recordingStartTimeRef.current = Date.now();
       chunkStartTimeRef.current = 0;
       setChunkCount(0);
@@ -348,15 +366,25 @@ function ChunkedAudioRecorder({
     }
 
     setAudioLevel(0);
+    setRecordStatus('Waiting for transcriptions...');
+
+    // Wait for all pending transcriptions to complete
+    console.log(`[Recording] Waiting for ${pendingTranscriptionsRef.current.length} pending transcriptions...`);
+    await Promise.all(pendingTranscriptionsRef.current);
+    console.log(`[Recording] All transcriptions complete. Total: ${transcribedChunksRef.current.length} chunks`);
+
     setRecordStatus('Processing complete!');
 
     // Create full audio blob from all chunks
     const allBlobs = allChunksRef.current.map(c => c.blob);
     const fullAudioBlob = new Blob(allBlobs, { type: 'audio/webm' });
 
-    // Callback to parent with all chunks and full audio
+    // Sort transcripts by index to ensure correct order
+    const sortedTranscripts = [...transcribedChunksRef.current].sort((a, b) => a.index - b.index);
+
+    // Callback to parent with all chunks, full audio, and transcripts
     if (onRecordingComplete) {
-      onRecordingComplete(allChunksRef.current, fullAudioBlob);
+      onRecordingComplete(allChunksRef.current, fullAudioBlob, sortedTranscripts);
     }
   };
 

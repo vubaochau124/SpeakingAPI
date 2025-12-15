@@ -16,6 +16,7 @@ from models import User, UserResult
 from auth import get_current_user
 from utils.audio import allowed_file, convert_to_wav, get_mime_type, _get_safe_temp_path
 from utils.scoring import calculate_azure_score
+from utils.assessment_logger import log_assessment
 from azure_api import AzureSpeechAPI
 from openai_evaluator import OpenAIEvaluator
 
@@ -346,6 +347,19 @@ async def evaluate_audio(
             ))
         db.commit()
 
+        # Log assessment to file
+        log_assessment(
+            user_id=current_user.id,
+            username=current_user.username,
+            assessment_type='unscripted',
+            question=question,
+            transcript=db_transcript,
+            azure_result=azure_result,
+            openai_result=openai_result,
+            combined_result=combined_result,
+            scores=scores_data
+        )
+
         return {
             'speech_score': azure_result.get('speech_score', {}) if azure_result else {},
             'audio_data': audio_base64,
@@ -492,8 +506,8 @@ async def evaluate_openai_streaming(
     )
 
 
-def _save_result_to_db(user_id, question_id, transcript, azure_result, openai_result, scores_data):
-    """Background task: Save result to database (runs in separate thread)"""
+def _save_result_to_db(user_id, username, question_id, question, transcript, azure_result, openai_result, scores_data):
+    """Background task: Save result to database and log to file (runs in separate thread)"""
     try:
         from database import SessionLocal
         db = SessionLocal()
@@ -522,6 +536,19 @@ def _save_result_to_db(user_id, question_id, transcript, azure_result, openai_re
                 ))
             db.commit()
             print(f"[DB] Result saved for user {user_id}", flush=True)
+
+            # Log assessment to file
+            log_assessment(
+                user_id=user_id,
+                username=username,
+                assessment_type='unscripted',
+                question=question,
+                transcript=transcript,
+                azure_result=azure_result,
+                openai_result=openai_result,
+                combined_result=scores_data.get('combined_result'),
+                scores=scores_data
+            )
         finally:
             db.close()
     except Exception as e:
@@ -706,7 +733,9 @@ async def evaluate_stream(
             _background_executor.submit(
                 _save_result_to_db,
                 current_user.id,
+                current_user.username,
                 question_id,
+                question,
                 db_transcript,
                 azure_result,
                 openai_result,
@@ -848,6 +877,19 @@ async def evaluate_conversation(
                 scores=scores_data
             ))
         db.commit()
+
+        # Log assessment to file
+        log_assessment(
+            user_id=current_user.id,
+            username=current_user.username,
+            assessment_type='conversation',
+            question=" ".join(texts_list),
+            transcript=transcript,
+            azure_result=results,
+            openai_result=None,
+            combined_result=None,
+            scores=scores_data
+        )
 
         return results
 

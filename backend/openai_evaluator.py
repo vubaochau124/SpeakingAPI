@@ -9,72 +9,103 @@ from dotenv import load_dotenv
 # CHUNKED EVALUATION PROMPTS - One per criterion for parallel processing
 # =============================================================================
 
-COHERENCE_PROMPT = """You are an expert English evaluator. Evaluate ONLY the COHERENCE of this speech transcript.
+COHERENCE_PROMPT = """You are an expert IELTS Speaking examiner. 
+The text you receive is a SPEECH-TO-TEXT TRANSCRIPTION of a spoken answer, not written text.
 
-COHERENCE CRITERIA (IELTS Levels 1-5):
-Ability to connect ideas, use connectors, and maintain logical flow in speech.
+IMPORTANT:
+- Ignore missing punctuation, sentence fragments, repetitions, fillers (e.g., "uh", "um"), and minor transcription errors.
+- Evaluate coherence as it appears in SPOKEN DISCOURSE, not written essays.
+- Focus on logical progression of ideas, spoken connectors, discourse markers, and overall flow.
 
-| Level | Description |
-|-------|-------------|
-| 1 (A2) | Limited ability to link sentences. Simple conjunctions only ("and," "but"). Can only produce simple answers, struggles to convey a coherent message. |
-| 2 (B1) | Links simple sentences using basic connectors, sometimes overuses certain conjunctions. Can convey simple content clearly but struggles with complex ideas. |
-| 3 (B2) | Has ability and desire to elaborate on sentences. Sometimes loses coherence due to repetition or unclear connections. Uses variety of conjunctions and discourse markers, but not always appropriately. |
-| 4 (C1) | Develops topics clearly and logically with strong cohesion. Uses flexible and diverse connectors and discourse markers. Ideas are well-organized and easy to follow. |
-| 5 (C2) | Speaks coherently with perfectly appropriate linguistic connections. Develops topics fully and logically. Seamless flow of ideas with sophisticated discourse markers. |
+Evaluate ONLY the COHERENCE of this speech transcript.
 
-SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5.0, Level 3→Band 5.5-6.5, Level 4→Band 7.0-8.0, Level 5→Band 8.5-9.0
-
-Return JSON with DETAILED justification:
-{
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
-  "feedback": "<detailed assessment>",
-  "justification": {
-    "matched_criteria": "<which specific criteria description they match>",
-    "connectors_used": ["<list connectors/discourse markers found>"],
-    "strengths": ["<specific examples from transcript showing good coherence>"],
-    "weaknesses": ["<specific examples showing lack of coherence>"],
-    "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
-}"""
-
-LEXICAL_PROMPT = """You are an expert English evaluator. Evaluate ONLY the LEXICAL RESOURCE of this speech transcript.
-
-LEXICAL RESOURCE CRITERIA (IELTS Levels 1-5):
-Range and flexibility of vocabulary; ability to use words beyond the topic; idioms, paraphrase; appropriate word choice.
+COHERENCE CRITERIA (IELTS Levels 1–5):
+Ability to connect ideas, use spoken connectors, and maintain logical flow while speaking.
 
 | Level | Description |
 |-------|-------------|
-| 1 (A2) | Can only use simple vocabulary for personal information. Lacks vocabulary for less familiar topics. |
-| 2 (B1) | Has enough vocabulary for familiar topics in work, study, and daily life. Starts using simple paraphrase when lacking a word. Still makes mistakes in word choice, expression not yet smooth. |
-| 3 (B2) | Has fairly wide vocabulary for many topics including unfamiliar ones. Can choose appropriate words in context with good variety, but lacks precision on abstract topics. Uses paraphrase more flexibly. |
-| 4 (C1) | Has wide, flexible vocabulary to express complex or abstract ideas accurately. Easily uses idioms, collocations, and paraphrase naturally. Can adjust speaking style according to context. |
-| 5 (C2) | Uses rich, flexible, and accurate vocabulary in all situations. Idioms, collocations, and paraphrase used naturally and subtly. Can choose words that convey nuance, emotion, or style. |
+| 1 (A2) | Limited ability to link ideas. Relies on very basic connectors ("and", "but"). Ideas appear disconnected or unclear. |
+| 2 (B1) | Links ideas using basic spoken connectors ("because", "so", "then"). Some repetition or weak organization. |
+| 3 (B2) | Can extend answers with supporting ideas. Uses a range of discourse markers, though sometimes unclear or repetitive. |
+| 4 (C1) | Develops ideas clearly and logically. Uses flexible discourse markers ("on the one hand", "as a result"). Easy to follow. |
+| 5 (C2) | Seamless and natural flow of ideas. Sophisticated, well-timed discourse markers. Fully coherent spoken response. |
 
-SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5.0, Level 3→Band 5.5-6.5, Level 4→Band 7.0-8.0, Level 5→Band 8.5-9.0
+SCORING:
+Level 1 → Band 3.0–3.5  
+Level 2 → Band 4.0–5.0  
+Level 3 → Band 5.5–6.5  
+Level 4 → Band 7.0–8.0  
+Level 5 → Band 8.5–9.0
 
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
-  "feedback": "<detailed assessment>",
+  "feedback": "<spoken-coherence-focused feedback>",
   "justification": {
-    "matched_criteria": "<which specific criteria description they match>",
+    "matched_criteria": "<matched IELTS spoken coherence description>",
+    "connectors_used": ["<spoken connectors or discourse markers detected>"],
+    "strengths": ["<examples of logical spoken progression>"],
+    "weaknesses": ["<examples of unclear or broken flow>"],
+    "reason_for_score": "<why this band fits IELTS coherence>",
+  },
+  "band": <float>,
+  "level": <1-5>,
+}
+"""
+
+LEXICAL_PROMPT = """You are an expert IELTS Speaking examiner.
+The text you receive is a SPEECH-TO-TEXT TRANSCRIPTION.
+
+IMPORTANT:
+- Ignore minor word repetition, hesitation, or ASR misrecognition.
+- Evaluate vocabulary as USED IN SPEAKING, not formal writing.
+- Credit paraphrasing, circumlocution, and natural spoken expressions.
+
+Evaluate ONLY the LEXICAL RESOURCE of this speech transcript.
+
+LEXICAL RESOURCE CRITERIA (IELTS Levels 1–5):
+Range, flexibility, precision of vocabulary in spoken English.
+
+| Level | Description |
+|-------|-------------|
+| 1 (A2) | Uses very basic spoken vocabulary for personal topics only. |
+| 2 (B1) | Adequate vocabulary for familiar topics. Uses simple paraphrase when stuck. |
+| 3 (B2) | Good range of vocabulary for most topics. Some imprecision with abstract ideas. |
+| 4 (C1) | Wide, flexible vocabulary. Uses idioms, collocations naturally in speech. |
+| 5 (C2) | Rich, precise vocabulary with nuance, tone, and emotion fully expressed. |
+
+SCORING:
+Level 1 → Band 3.0–3.5  
+Level 2 → Band 4.0–5.0  
+Level 3 → Band 5.5–6.5  
+Level 4 → Band 7.0–8.0  
+Level 5 → Band 8.5–9.0
+
+Return JSON with DETAILED justification:
+{
+  "feedback": "<spoken-lexical feedback>",
+  "justification": {
+    "matched_criteria": "<IELTS lexical level description>",
     "vocabulary_examples": {
-      "advanced_words": ["<sophisticated vocabulary used>"],
-      "basic_words": ["<simple/basic vocabulary used>"],
-      "idioms_collocations": ["<any idioms or collocations found>"],
-      "word_choice_errors": ["<inappropriate word choices if any>"]
+      "advanced_words": ["<higher-level spoken vocabulary>"],
+      "basic_words": ["<basic or repetitive vocabulary>"],
+      "idioms_collocations": ["<spoken idioms/collocations if any>"],
+      "word_choice_errors": ["<clear lexical misuse only>"]
     },
-    "strengths": ["<specific examples showing good vocabulary use>"],
-    "weaknesses": ["<specific examples showing limited vocabulary>"],
-    "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
-}"""
+    "strengths": ["<effective spoken word use>"],
+    "weaknesses": ["<limitations in spoken vocabulary>"],
+    "reason_for_score": "<IELTS lexical justification>",
+  },
+  "band": <float 1.0-9.0>,
+  "level": <1-5 which level they match>,
+}
+"""
 
 GRAMMAR_PROMPT = """You are an expert English evaluator. Evaluate ONLY the GRAMMAR of this speech transcript.
-
-IMPORTANT: This is a speech-to-text transcript. Some errors may be transcription artifacts (plural forms, homophones, word endings, punctuation), so ignore them. Focus on clear structural issues.
+IMPORTANT:
+- This is a SPEECH-TO-TEXT transcription.
+- Ignore ASR-related errors (missing articles, plural -s, verb endings).
+- Evaluate grammar control as demonstrated in SPOKEN production.
+- Focus on sentence variety, clause control, and communicative accuracy.
 
 GRAMMAR CRITERIA (IELTS Levels 1-5):
 Use of diverse sentence structures (simple, complex, subordinate clauses) and accurate expressions.
@@ -91,8 +122,6 @@ SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5
 
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
   "feedback": "<detailed assessment>",
   "errors": [{"category": "<type>", "original": "<text>", "correction": "<fix>", "explanation": "<why>"}],
   "justification": {
@@ -108,46 +137,62 @@ Return JSON with DETAILED justification:
     },
     "strengths": ["<specific examples showing good grammar>"],
     "weaknesses": ["<specific examples showing grammar issues>"],
-    "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
+    "reason_for_score": "<explain exactly why this band was given based on the criteria>",
+  },
+  "band": <float 1.0-9.0>,
+  "level": <1-5 which level they match>,
 }"""
 
-TOPIC_RELEVANCE_PROMPT = """You are an expert English evaluator. Evaluate ONLY the TOPIC RELEVANCE of this speech transcript.
+TOPIC_RELEVANCE_PROMPT = """You are an expert IELTS Speaking examiner.
+The text you receive is a SPEECH-TO-TEXT TRANSCRIPTION.
 
-TOPIC RELEVANCE CRITERIA (IELTS Levels 1-5):
-Ability to understand the question/topic and respond appropriately with relevant content.
+IMPORTANT:
+- Evaluate relevance based on SPOKEN task response.
+- Minor digressions are acceptable if they support the main idea.
+- Penalize only clear misunderstanding or failure to address the question.
+
+Evaluate ONLY the TOPIC RELEVANCE of this speech transcript.
+
+TOPIC RELEVANCE CRITERIA (IELTS Levels 1–5):
+Ability to understand the question and respond appropriately in spoken English.
 
 | Level | Description |
 |-------|-------------|
-| 1 (A2) | Can grasp main idea if the question is simple and clear. Understands simple instructions and familiar questions. Response may be partially off-topic. |
-| 2 (B1) | Can follow familiar topics and respond with relevant content. Recognizes main idea and key details. May include some irrelevant information. |
-| 3 (B2) | Understands main ideas and responds with relevant supporting details. Recognizes implied meaning in questions. Response is mostly on-topic with minor digressions. |
-| 4 (C1) | Clearly understands complex questions and nuances. Responds with highly relevant and well-organized content. Addresses all aspects of the question. |
-| 5 (C2) | Understands all nuances and subtleties in questions. Responds with perfectly relevant, comprehensive content. Demonstrates deep understanding of the topic. |
+| 1 (A2) | Partial understanding. Response often off-topic or incomplete. |
+| 2 (B1) | Understands main idea. Some irrelevant or repetitive content. |
+| 3 (B2) | Mostly relevant response with minor digressions. |
+| 4 (C1) | Fully relevant, well-developed spoken response. |
+| 5 (C2) | Precise, nuanced, and fully appropriate response. |
 
-SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5.0, Level 3→Band 5.5-6.5, Level 4→Band 7.0-8.0, Level 5→Band 8.5-9.0
+SCORING:
+Level 1 → Band 3.0–3.5  
+Level 2 → Band 4.0–5.0  
+Level 3 → Band 5.5–6.5  
+Level 4 → Band 7.0–8.0  
+Level 5 → Band 8.5–9.0
 
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
-  "feedback": "<detailed assessment>",
+  "feedback": "<spoken task-response feedback>",
   "justification": {
-    "matched_criteria": "<which specific criteria description they match>",
+    "matched_criteria": "<IELTS relevance descriptor>",
     "question_analysis": {
-      "main_topic": "<what the question is asking about>",
-      "key_aspects": ["<specific aspects the question requires addressing>"]
+      "main_topic": "<what the question asks>",
+      "key_aspects": ["<required aspects>"]
     },
     "response_analysis": {
-      "relevant_points": ["<parts of response that directly address the question>"],
-      "irrelevant_points": ["<parts of response that are off-topic>"],
-      "missing_aspects": ["<aspects of the question not addressed>"]
+      "relevant_points": ["<on-topic spoken content>"],
+      "irrelevant_points": ["<clear digressions>"],
+      "missing_aspects": ["<unaddressed parts>"]
     },
-    "strengths": ["<specific examples showing good relevance>"],
-    "weaknesses": ["<specific examples showing lack of relevance>"],
-    "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
-}"""
+    "strengths": ["<good relevance examples>"],
+    "weaknesses": ["<relevance gaps>"],
+    "reason_for_score": "<IELTS justification>",
+  },
+  "level": <1-5>,
+  "band": <float>
+}
+"""
 
 # Cached system prompt for improvement suggestions
 IMPROVEMENT_PROMPT = """You are an expert English teacher providing improved answer suggestions based on IELTS criteria.
@@ -216,7 +261,7 @@ class OpenAIEvaluator:
                     {"role": "user", "content": user_prompt}
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.3
+                temperature=0
             )
             result = json.loads(response.choices[0].message.content)
             # Round band to nearest 0.5
@@ -301,7 +346,7 @@ GUIDELINES (in order of priority):
                 {"role": "user", "content": improvement_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.3
+            temperature=0
         )
 
         return json.loads(response.choices[0].message.content)
