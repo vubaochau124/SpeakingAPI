@@ -10,34 +10,34 @@ function IELTSScore({ scores, title = "IELTS Score", detectedDialect, combinedRe
 
   // Color functions for IELTS bands (1.0-9.0)
   const getBandColor = (band) => {
-    if (band === null || band === undefined) return 'text-slate-500';
-    if (band >= 7.0) return 'text-emerald-400';  // C1-C2
-    if (band >= 5.5) return 'text-blue-400';     // B2
-    if (band >= 4.0) return 'text-amber-400';    // B1
-    return 'text-red-400';                        // A1-A2
+    if (band === null || band === undefined) return 'text-gray-500';
+    if (band >= 7.0) return 'text-emerald-600';  // C1-C2
+    if (band >= 5.5) return 'text-blue-600';     // B2
+    if (band >= 4.0) return 'text-amber-600';    // B1
+    return 'text-red-600';                        // A1-A2
   };
 
   const getBandBg = (band) => {
-    if (band === null || band === undefined) return 'bg-slate-700/50';
-    if (band >= 7.0) return 'bg-emerald-500/20 border-emerald-500/30';
-    if (band >= 5.5) return 'bg-blue-500/20 border-blue-500/30';
-    if (band >= 4.0) return 'bg-amber-500/20 border-amber-500/30';
-    return 'bg-red-500/20 border-red-500/30';
+    if (band === null || band === undefined) return 'bg-gray-100';
+    if (band >= 7.0) return 'bg-emerald-50 border-emerald-200';
+    if (band >= 5.5) return 'bg-blue-50 border-blue-200';
+    if (band >= 4.0) return 'bg-amber-50 border-amber-200';
+    return 'bg-red-50 border-red-200';
   };
 
   // Legacy color functions for 0-100 scale
   const getScoreColor = (score) => {
-    if (score === null || score === undefined) return 'text-slate-500';
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 60) return 'text-amber-400';
-    return 'text-red-400';
+    if (score === null || score === undefined) return 'text-gray-500';
+    if (score >= 80) return 'text-emerald-600';
+    if (score >= 60) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   const getScoreBg = (score) => {
-    if (score === null || score === undefined) return 'bg-slate-700/50';
-    if (score >= 80) return 'bg-emerald-500/20 border-emerald-500/30';
-    if (score >= 60) return 'bg-amber-500/20 border-amber-500/30';
-    return 'bg-red-500/20 border-red-500/30';
+    if (score === null || score === undefined) return 'bg-gray-100';
+    if (score >= 80) return 'bg-emerald-50 border-emerald-200';
+    if (score >= 60) return 'bg-amber-50 border-amber-200';
+    return 'bg-red-50 border-red-200';
   };
 
   const formatBand = (band) => {
@@ -65,14 +65,14 @@ function IELTSScore({ scores, title = "IELTS Score", detectedDialect, combinedRe
     <div className={`p-4 rounded-xl border ${getBandBg(value)} transition-all duration-300`}>
       <div className="flex items-center gap-2 mb-2">
         <span className="text-lg">{icon}</span>
-        <span className="text-slate-400 text-sm font-medium">{label}</span>
+        <span className="text-gray-500 text-sm font-medium">{label}</span>
       </div>
       <p className={`text-3xl font-bold ${getBandColor(value)}`}>
         {formatBand(value)}
       </p>
       <div className="flex justify-between items-center mt-1">
-        <p className="text-xs text-slate-500">/9.0</p>
-        {value && <span className="text-xs text-slate-400">{getCEFRLevel(value)}</span>}
+        <p className="text-xs text-gray-400">/9.0</p>
+        {value && <span className="text-xs text-gray-500">{getCEFRLevel(value)}</span>}
       </div>
     </div>
   );
@@ -82,12 +82,12 @@ function IELTSScore({ scores, title = "IELTS Score", detectedDialect, combinedRe
     <div className={`p-4 rounded-xl border ${getScoreBg(value)} transition-all duration-300`}>
       <div className="flex items-center gap-2 mb-2">
         <span className="text-lg">{icon}</span>
-        <span className="text-slate-400 text-sm font-medium">{label}</span>
+        <span className="text-gray-500 text-sm font-medium">{label}</span>
       </div>
       <p className={`text-3xl font-bold ${getScoreColor(value)}`}>
         {formatScore(value)}
       </p>
-      <p className="text-xs text-slate-500 mt-1">/100</p>
+      <p className="text-xs text-gray-400 mt-1">/100</p>
     </div>
   );
 
@@ -96,14 +96,14 @@ function IELTSScore({ scores, title = "IELTS Score", detectedDialect, combinedRe
     <div className={`p-6 rounded-xl border ${getBandBg(band)} transition-all duration-300 col-span-2 md:col-span-1`}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-2xl">🏆</span>
-        <span className="text-slate-300 font-semibold">Overall Band</span>
+        <span className="text-gray-600 font-semibold">Overall Band</span>
       </div>
       <div className="flex items-baseline gap-3">
         <p className={`text-5xl font-bold ${getBandColor(band)}`}>
           {formatBand(band)}
         </p>
         <div className="flex flex-col">
-          <span className="text-slate-500 text-sm">/9.0</span>
+          <span className="text-gray-400 text-sm">/9.0</span>
           {band && <span className={`text-lg font-semibold ${getBandColor(band)}`}>{getCEFRLevel(band)}</span>}
         </div>
       </div>
@@ -112,24 +112,24 @@ function IELTSScore({ scores, title = "IELTS Score", detectedDialect, combinedRe
 
   if (!displayScores) {
     return (
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-        <h2 className="text-xl font-bold text-white mb-4">{title}</h2>
-        <p className="text-slate-400">No score data available</p>
+      <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">{title}</h2>
+        <p className="text-gray-500">No score data available</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+    <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-white">{title}</h2>
+        <h2 className="text-xl font-bold text-gray-900">{title}</h2>
         {detectedDialect && (
-          <p className="text-slate-400 text-sm mt-1">
-            Detected dialect: <span className="text-blue-400">{detectedDialect}</span>
+          <p className="text-gray-500 text-sm mt-1">
+            Detected dialect: <span className="text-blue-600">{detectedDialect}</span>
           </p>
         )}
         {isIELTSFormat && (
-          <p className="text-slate-500 text-xs mt-1">IELTS Band Scores (1.0-9.0)</p>
+          <p className="text-gray-400 text-xs mt-1">IELTS Band Scores (1.0-9.0)</p>
         )}
       </div>
 
@@ -160,8 +160,8 @@ function IELTSScore({ scores, title = "IELTS Score", detectedDialect, combinedRe
             {displayScores.pronunciation != null && (
               <BandItem label="Pronunciation" value={displayScores.pronunciation} icon="🎯" />
             )}
-            {displayScores.topic_relevance != null && (
-              <BandItem label="Topic Relevance" value={displayScores.topic_relevance} icon="💬" />
+            {displayScores.understanding != null && (
+              <BandItem label="Understanding" value={displayScores.understanding} icon="🧠" />
             )}
           </div>
         </div>

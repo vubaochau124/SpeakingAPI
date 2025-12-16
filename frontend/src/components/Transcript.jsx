@@ -10,7 +10,8 @@ import {
   getSyllableText,
   getSyllableScore,
   getWordPlaybackTiming,
-  getSyllablePlaybackTiming
+  getSyllablePlaybackTiming,
+  isFillerWord
 } from '../utils/azureWordUtils';
 
 function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
@@ -86,18 +87,22 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
   };
 
   const getWordColor = (score) => {
-    if (score >= 90) return 'text-emerald-400 hover:bg-emerald-500/20';
-    if (score >= 70) return 'text-amber-400 hover:bg-amber-500/20';
-    return 'text-red-400 hover:bg-red-500/20';
+    // Filler words (no score) get a neutral gray color
+    if (score === null || score === undefined) return 'text-gray-500 hover:bg-gray-200';
+    if (score >= 90) return 'text-emerald-600 hover:bg-emerald-500/20';
+    if (score >= 70) return 'text-amber-600 hover:bg-amber-500/20';
+    return 'text-red-600 hover:bg-red-500/20';
   };
 
   const getScoreColor = (score) => {
-    if (score >= 90) return 'text-emerald-400';
-    if (score >= 70) return 'text-amber-400';
-    return 'text-red-400';
+    if (score === null || score === undefined) return 'text-gray-500';
+    if (score >= 90) return 'text-emerald-600';
+    if (score >= 70) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   const formatScore = (score) => {
+    if (score === null || score === undefined) return '—';
     return typeof score === 'number' ? score.toFixed(1) : score;
   };
 
@@ -123,21 +128,26 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
 
   return (
     <div>
-      <h3 className="text-xl font-bold text-white mb-4">Transcript</h3>
-      <p className="text-sm text-slate-400 mb-3">Click on any word to see details and hear pronunciation</p>
+      <h3 className="text-xl font-bold text-gray-900 mb-4">Transcript</h3>
+      <p className="text-sm text-gray-500 mb-3">Click on any word to see details and hear pronunciation</p>
 
       {/* Clickable Words */}
       <div className="flex flex-wrap gap-2 items-baseline text-lg">
-        {wordList.map((wordInfo, index) => (
-          <span key={index} className="inline-flex items-baseline">
-            <button
-              onClick={() => setSelectedWord(wordInfo)}
-              className={`cursor-pointer px-2 py-1 rounded-lg transition-all duration-200 font-medium ${getWordColor(getWordScore(wordInfo))}`}
-            >
-              {getWord(wordInfo)}
-            </button>
-          </span>
-        ))}
+        {wordList.map((wordInfo, index) => {
+          const isFiller = isFillerWord(wordInfo);
+          const score = getWordScore(wordInfo);
+          return (
+            <span key={index} className="inline-flex items-baseline">
+              <button
+                onClick={() => !isFiller && setSelectedWord(wordInfo)}
+                className={`px-2 py-1 rounded-lg transition-all duration-200 font-medium ${getWordColor(score)} ${isFiller ? 'cursor-default italic' : 'cursor-pointer'}`}
+                title={isFiller ? 'Filler word (no pronunciation score)' : undefined}
+              >
+                {getWord(wordInfo)}
+              </button>
+            </span>
+          );
+        })}
       </div>
 
       {/* Popup Modal */}
@@ -150,13 +160,13 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
           />
 
           {/* Popup - Centered and on top */}
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-800 rounded-2xl shadow-2xl p-6 z-[9999] max-w-md w-full mx-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl p-6 z-[9999] max-w-md w-full mx-4 border border-gray-200 max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
+            <div className="flex justify-between items-start mb-4 pb-3 border-b border-gray-200">
               <div>
-                <h3 className="text-3xl font-bold text-white">{getWordWithStress(selectedWord)}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Original: {getWord(selectedWord)}</p>
-                <p className="text-sm text-slate-400 mt-1">
+                <h3 className="text-3xl font-bold text-gray-900">{getWordWithStress(selectedWord)}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Original: {getWord(selectedWord)}</p>
+                <p className="text-sm text-gray-500 mt-1">
                   Quality Score:{' '}
                   <span className={`font-semibold ${getScoreColor(getWordScore(selectedWord))}`}>
                     {formatScore(getWordScore(selectedWord))}
@@ -165,7 +175,7 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
               </div>
               <button
                 onClick={() => setSelectedWord(null)}
-                className="text-slate-400 hover:text-white text-2xl font-bold"
+                className="text-gray-500 hover:text-gray-900 text-2xl font-bold"
               >
                 ×
               </button>
@@ -176,7 +186,7 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
               <button
                 onClick={() => playWordAudio(selectedWord)}
                 disabled={isPlaying}
-                className="w-full mb-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full mb-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isPlaying ? (
                   <>
@@ -193,7 +203,7 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
             {/* Syllables - only show if syllables have text */}
             {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).length > 0 && (
               <div className="mb-4">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables (click to hear)</h4>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Syllables (click to hear)</h4>
                 <div className="flex flex-wrap gap-2">
                   {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).map((syl, i) => {
                     const syllableScore = getSyllableScore(syl);
@@ -210,7 +220,7 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
                             : 'bg-red-500/20 border-red-500/30 hover:bg-red-500/30'
                         }`}
                       >
-                        <span className="text-white font-medium">
+                        <span className="text-gray-900 font-medium">
                           {getSyllableText(syl)}
                         </span>
                         <span className={`ml-2 text-sm ${getScoreColor(syllableScore)}`}>
@@ -227,19 +237,19 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
             {/* Phonemes Table - Only for English */}
             {showPhonemes && getPhonemes(selectedWord).length > 0 && (
               <div className="overflow-y-auto max-h-64">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes</h4>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Phonemes</h4>
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-700/50">
-                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Phoneme</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Score</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600 text-sm">Phoneme</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600 text-sm">Score</th>
                     </tr>
                   </thead>
                   <tbody>
                     {getPhonemes(selectedWord).map((phone, index) => (
-                      <tr key={index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                      <tr key={index} className="border-b border-gray-200/50 hover:bg-slate-700/30">
                         <td className="py-2 px-3">
-                          <span className="text-lg font-bold text-cyan-400">
+                          <span className="text-lg font-bold text-blue-600">
                             /{getPhonemeText(phone)}/
                           </span>
                         </td>

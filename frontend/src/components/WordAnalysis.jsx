@@ -14,9 +14,9 @@ function WordAnalysis({ wordList, language = 'en-US' }) {
   const showPhonemes = language?.startsWith('en');
 
   const getScoreColor = (score) => {
-    if (score >= 90) return 'text-emerald-400';
-    if (score >= 70) return 'text-amber-400';
-    return 'text-red-400';
+    if (score >= 90) return 'text-emerald-600';
+    if (score >= 70) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   const getScoreBgColor = (score) => {
@@ -93,7 +93,7 @@ function WordAnalysis({ wordList, language = 'en-US' }) {
                           <div className="text-sm text-slate-400 mb-1">
                             Phoneme {index + 1}
                           </div>
-                          <div className="text-2xl font-bold text-cyan-400 mb-2">
+                          <div className="text-2xl font-bold text-cyan-600 mb-2">
                             /{getPhonemeText(phone)}/
                           </div>
                           <div className="text-sm">

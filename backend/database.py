@@ -103,6 +103,19 @@ def run_migrations():
                 ALTER TABLE assignments ADD COLUMN deadline TIMESTAMP WITH TIME ZONE;
             END IF;
         END $$;
+        """,
+        # Remove unique constraint from user_results to allow history tracking
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_user_part_type') THEN
+                ALTER TABLE user_results DROP CONSTRAINT uq_user_part_type;
+            END IF;
+        END $$;
+        """,
+        # Add index for efficient progress queries
+        """
+        CREATE INDEX IF NOT EXISTS ix_user_results_user_created ON user_results(user_id, created_at);
         """
     ]
 

@@ -276,36 +276,24 @@ async def evaluate_audio(
 
         os.remove(filepath)
 
-        # Save to database
-        db_transcript = azure_result.get('speech_score', {}).get('transcript', '') if azure_result else transcript
+        # Save to database - use Whisper transcript (has filler words, proper punctuation/casing)
+        db_transcript = transcript
         scores_data = {
             'unscripted_result': azure_score,
             'openai_result': openai_result,
             'combined_result': combined_result
         }
 
-        existing_result = db.query(UserResult).filter(
-            UserResult.user_id == current_user.id,
-            UserResult.part_type == 'unscripted'
-        ).first()
-
-        if existing_result:
-            existing_result.question_id = question_id
-            existing_result.transcript = db_transcript
-            existing_result.azure_result = azure_result
-            existing_result.openai_result = openai_result
-            existing_result.scores = scores_data
-            existing_result.updated_at = datetime.now()
-        else:
-            db.add(UserResult(
-                user_id=current_user.id,
-                part_type='unscripted',
-                question_id=question_id,
-                transcript=db_transcript,
-                azure_result=azure_result,
-                openai_result=openai_result,
-                scores=scores_data
-            ))
+        # Always INSERT new record to preserve history for progress tracking
+        db.add(UserResult(
+            user_id=current_user.id,
+            part_type='unscripted',
+            question_id=question_id,
+            transcript=db_transcript,
+            azure_result=azure_result,
+            openai_result=openai_result,
+            scores=scores_data
+        ))
         db.commit()
 
         return {
@@ -468,28 +456,16 @@ def _save_result_to_db(user_id, question_id, transcript, azure_result, openai_re
         from database import SessionLocal
         db = SessionLocal()
         try:
-            existing_result = db.query(UserResult).filter(
-                UserResult.user_id == user_id,
-                UserResult.part_type == 'unscripted'
-            ).first()
-
-            if existing_result:
-                existing_result.question_id = question_id
-                existing_result.transcript = transcript
-                existing_result.azure_result = azure_result
-                existing_result.openai_result = openai_result
-                existing_result.scores = scores_data
-                existing_result.updated_at = datetime.now()
-            else:
-                db.add(UserResult(
-                    user_id=user_id,
-                    part_type='unscripted',
-                    question_id=question_id,
-                    transcript=transcript,
-                    azure_result=azure_result,
-                    openai_result=openai_result,
-                    scores=scores_data
-                ))
+            # Always INSERT new record to preserve history for progress tracking
+            db.add(UserResult(
+                user_id=user_id,
+                part_type='unscripted',
+                question_id=question_id,
+                transcript=transcript,
+                azure_result=azure_result,
+                openai_result=openai_result,
+                scores=scores_data
+            ))
             db.commit()
             print(f"[DB] Result saved for user {user_id}", flush=True)
         finally:
@@ -570,7 +546,7 @@ async def evaluate_stream(
                 asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result)
             )
 
-            criteria = ['coherence', 'lexical_resource', 'grammar', 'topic_relevance']
+            criteria = ['coherence', 'lexical_resource', 'grammar', 'understanding']
             criterion_tasks = {
                 asyncio.create_task(
                     asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question, language)
@@ -629,7 +605,8 @@ async def evaluate_stream(
                 print(f"[Stream] Improved answer error: {e}", flush=True)
 
             # Step 6: Save to database in background thread (non-blocking)
-            db_transcript = azure_result.get('speech_score', {}).get('transcript', '') if azure_result else transcript
+            # Use Whisper transcript (has filler words, proper punctuation/casing) instead of Azure's
+            db_transcript = transcript
             scores_data = {
                 'unscripted_result': calculate_azure_score(azure_result) if azure_result else {},
                 'openai_result': openai_result,
@@ -760,26 +737,15 @@ async def evaluate_conversation(
             'azure_prosody': azure_scores.get('prosody', 0)
         }
 
-        existing_result = db.query(UserResult).filter(
-            UserResult.user_id == current_user.id,
-            UserResult.part_type == 'conversation'
-        ).first()
-
-        if existing_result:
-            existing_result.conversation_id = conversation_id
-            existing_result.transcript = transcript
-            existing_result.azure_result = results
-            existing_result.scores = scores_data
-            existing_result.updated_at = datetime.now()
-        else:
-            db.add(UserResult(
-                user_id=current_user.id,
-                part_type='conversation',
-                conversation_id=conversation_id,
-                transcript=transcript,
-                azure_result=results,
-                scores=scores_data
-            ))
+        # Always INSERT new record to preserve history for progress tracking
+        db.add(UserResult(
+            user_id=current_user.id,
+            part_type='conversation',
+            conversation_id=conversation_id,
+            transcript=transcript,
+            azure_result=results,
+            scores=scores_data
+        ))
         db.commit()
 
         return results

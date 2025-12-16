@@ -19,8 +19,6 @@ SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5
 
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
   "feedback": "<detailed assessment>",
   "justification": {
     "matched_criteria": "<which specific criteria description they match>",
@@ -28,7 +26,9 @@ Return JSON with DETAILED justification:
     "strengths": ["<specific examples from transcript showing good coherence>"],
     "weaknesses": ["<specific examples showing lack of coherence>"],
     "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
+  },
+  "band": <float 1.0-9.0>,
+  "level": <1-5 which level they match>
 }"""
 
 LEXICAL_PROMPT_EN = """You are an expert English evaluator. Evaluate ONLY the LEXICAL RESOURCE of this speech transcript.
@@ -48,8 +48,6 @@ SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5
 
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
   "feedback": "<detailed assessment>",
   "justification": {
     "matched_criteria": "<which specific criteria description they match>",
@@ -62,12 +60,27 @@ Return JSON with DETAILED justification:
     "strengths": ["<specific examples showing good vocabulary use>"],
     "weaknesses": ["<specific examples showing limited vocabulary>"],
     "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
+  },
+  "band": <float 1.0-9.0>,
+  "level": <1-5 which level they match>
 }"""
 
 GRAMMAR_PROMPT_EN = """You are an expert English evaluator. Evaluate ONLY the GRAMMAR of this speech transcript.
 
-IMPORTANT: This is a speech-to-text transcript. Some errors may be transcription artifacts (plural forms, homophones, word endings, punctuation), so ignore them. Focus on clear structural issues.
+IMPORTANT - IGNORE these errors (speech-to-text artifacts):
+- Punctuation errors (missing periods, commas, apostrophes)
+- Missing or extra "s" sounds (e.g., "bird" vs "birds") - these are often transcription errors
+- Homophones (e.g., "there/their/they're", "your/you're")
+- Minor word endings that sound similar (e.g., "-ed", "-ing" variations)
+- Capitalization errors
+
+ONLY report these ACTUAL grammar errors:
+- Subject-verb agreement errors (e.g., "he go" instead of "he goes")
+- Tense errors (e.g., mixing past and present inappropriately)
+- Word order errors
+- Missing or incorrect articles (a/an/the) when clearly wrong
+- Sentence fragments or run-on sentences
+- Incorrect prepositions (e.g., "good in" instead of "good at")
 
 GRAMMAR CRITERIA (IELTS Levels 1-5):
 Use of diverse sentence structures (simple, complex, subordinate clauses) and accurate expressions.
@@ -84,8 +97,6 @@ SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5
 
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
   "feedback": "<detailed assessment>",
   "errors": [{"category": "<type>", "original": "<text>", "correction": "<fix>", "explanation": "<why>"}],
   "justification": {
@@ -102,44 +113,54 @@ Return JSON with DETAILED justification:
     "strengths": ["<specific examples showing good grammar>"],
     "weaknesses": ["<specific examples showing grammar issues>"],
     "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
+  },
+  "band": <float 1.0-9.0>,
+  "level": <1-5 which level they match>
 }"""
 
-TOPIC_RELEVANCE_PROMPT_EN = """You are an expert English evaluator. Evaluate ONLY the TOPIC RELEVANCE of this speech transcript.
+UNDERSTANDING_PROMPT_EN = """You are an expert English evaluator. Evaluate ONLY how well the speaker's response ADDRESSES the question asked.
 
-TOPIC RELEVANCE CRITERIA (IELTS Levels 1-5):
-Ability to understand the question/topic and respond appropriately with relevant content.
+IMPORTANT SCORING GUIDANCE:
+- If the response is on-topic and addresses the question, even with simple language, score at least Level 3 (Band 5.5+)
+- Focus on WHETHER they answered the question, not HOW perfectly they answered it
+- A response that addresses the main point of the question deserves a good score
+- Only give low scores (Level 1-2) if the response is clearly off-topic or fails to address the question
+
+UNDERSTANDING CRITERIA (IELTS Levels 1-5):
+How well the speaker's response addresses and answers the question asked.
 
 | Level | Description |
 |-------|-------------|
-| 1 (A2) | Can grasp main idea if the question is simple and clear. Understands simple instructions and familiar questions. Response may be partially off-topic. |
-| 2 (B1) | Can follow familiar topics and respond with relevant content. Recognizes main idea and key details. May include some irrelevant information. |
-| 3 (B2) | Understands main ideas and responds with relevant supporting details. Recognizes implied meaning in questions. Response is mostly on-topic with minor digressions. |
-| 4 (C1) | Clearly understands complex questions and nuances. Responds with highly relevant and well-organized content. Addresses all aspects of the question. |
-| 5 (C2) | Understands all nuances and subtleties in questions. Responds with perfectly relevant, comprehensive content. Demonstrates deep understanding of the topic. |
+| 1 (A2) | Response does NOT address the question. Speaker seems confused about what was asked. Answer is completely off-topic or unrelated. |
+| 2 (B1) | Response only partially addresses the question. Some relevant content but misses the main point or goes significantly off-topic. |
+| 3 (B2) | Response addresses the question adequately. Speaker understood the main point and provides a relevant answer, even if not comprehensive. |
+| 4 (C1) | Response fully addresses the question with relevant details. Speaker clearly understood the question and provides a complete, on-topic answer. |
+| 5 (C2) | Response excellently addresses all aspects of the question. Speaker demonstrates deep understanding and provides insightful, comprehensive answer. |
 
 SCORING: Map levels to IELTS bands: Level 1→Band 3.0-3.5, Level 2→Band 4.0-5.0, Level 3→Band 5.5-6.5, Level 4→Band 7.0-8.0, Level 5→Band 8.5-9.0
 
+DEFAULT ASSUMPTION: If the speaker provides any on-topic response, assume they understood the question (Level 3+). Only score lower if there's clear evidence of misunderstanding.
+
 Return JSON with DETAILED justification:
 {
-  "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
   "feedback": "<detailed assessment>",
   "justification": {
     "matched_criteria": "<which specific criteria description they match>",
     "question_analysis": {
-      "main_topic": "<what the question is asking about>",
-      "key_aspects": ["<specific aspects the question requires addressing>"]
+      "question_topic": "<the main topic/subject of the question>",
+      "what_is_asked": "<what kind of response the question expects>"
     },
     "response_analysis": {
-      "relevant_points": ["<parts of response that directly address the question>"],
-      "irrelevant_points": ["<parts of response that are off-topic>"],
-      "missing_aspects": ["<aspects of the question not addressed>"]
+      "addresses_question": <true/false>,
+      "relevant_content": ["<parts of the response that are on-topic and address the question>"],
+      "off_topic_content": ["<parts that don't relate to the question, if any>"]
     },
-    "strengths": ["<specific examples showing good relevance>"],
-    "weaknesses": ["<specific examples showing lack of relevance>"],
-    "reason_for_score": "<explain exactly why this band was given based on the criteria>"
-  }
+    "strengths": ["<how the response successfully addresses the question>"],
+    "weaknesses": ["<only if response fails to address parts of the question>"],
+    "reason_for_score": "<explain exactly why this band was given - be generous if response is on-topic>"
+  },
+  "band": <float 1.0-9.0>,
+  "level": <1-5 which level they match>
 }"""
 
 IMPROVEMENT_PROMPT_EN = """You are an expert English teacher providing improved answer suggestions based on IELTS criteria.
@@ -160,6 +181,6 @@ PROMPTS_EN = {
     'coherence': COHERENCE_PROMPT_EN,
     'lexical_resource': LEXICAL_PROMPT_EN,
     'grammar': GRAMMAR_PROMPT_EN,
-    'topic_relevance': TOPIC_RELEVANCE_PROMPT_EN,
+    'understanding': UNDERSTANDING_PROMPT_EN,
     'improvement': IMPROVEMENT_PROMPT_EN
 }

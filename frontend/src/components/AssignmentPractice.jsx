@@ -124,12 +124,12 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 p-4">
+    <div className="min-h-screen bg-gray-50 p-4">
       <div className="container mx-auto max-w-4xl">
         {/* Back Button */}
         <button
           onClick={onBack}
-          className="mb-6 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+          className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -140,40 +140,40 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
         {!results ? (
           <>
             {/* Assignment Info */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-slate-700/50">
+            <div className="bg-white shadow-sm rounded-2xl p-6 mb-6 border border-gray-200">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
                 <div>
-                  <span className="inline-block px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded mb-1">
+                  <span className="inline-block px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded mb-1">
                     {assignment.topic}
                   </span>
-                  <h1 className="text-xl font-bold text-white">Assignment</h1>
+                  <h1 className="text-xl font-bold text-gray-900">Assignment</h1>
                 </div>
               </div>
 
               {/* Question */}
-              <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl p-5 mb-4">
-                <h2 className="text-lg font-semibold text-white mb-2">Question</h2>
-                <p className="text-slate-200 text-lg leading-relaxed">{assignment.question_text}</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Question</h2>
+                <p className="text-gray-700 text-lg leading-relaxed">{assignment.question_text}</p>
               </div>
 
               {/* Requirements & Instructions */}
               {(assignment.requirements || assignment.instructions) && (
                 <div className="grid md:grid-cols-2 gap-4">
                   {assignment.requirements && (
-                    <div className="bg-slate-700/30 rounded-lg p-4">
-                      <h3 className="text-sm font-semibold text-amber-400 mb-2">Requirements</h3>
-                      <p className="text-slate-300 text-sm">{assignment.requirements}</p>
+                    <div className="bg-gray-100 rounded-lg p-4">
+                      <h3 className="text-sm font-semibold text-amber-600 mb-2">Requirements</h3>
+                      <p className="text-gray-600 text-sm">{assignment.requirements}</p>
                     </div>
                   )}
                   {assignment.instructions && (
-                    <div className="bg-slate-700/30 rounded-lg p-4">
-                      <h3 className="text-sm font-semibold text-cyan-400 mb-2">Instructions</h3>
-                      <p className="text-slate-300 text-sm">{assignment.instructions}</p>
+                    <div className="bg-gray-100 rounded-lg p-4">
+                      <h3 className="text-sm font-semibold text-blue-600 mb-2">Instructions</h3>
+                      <p className="text-gray-600 text-sm">{assignment.instructions}</p>
                     </div>
                   )}
                 </div>
@@ -181,11 +181,11 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
             </div>
 
             {/* Recording Section */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50">
-              <h2 className="text-xl font-bold text-white text-center mb-6">Record Your Answer</h2>
+            <div className="bg-white shadow-sm rounded-2xl p-8 border border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 text-center mb-6">Record Your Answer</h2>
 
               {error && (
-                <div className="mb-6 bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl text-center">
+                <div className="mb-6 bg-red-500/20 border border-red-500/50 text-red-600 px-4 py-3 rounded-xl text-center">
                   {error}
                 </div>
               )}
@@ -201,15 +201,15 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
                       className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
                         isRecording
                           ? 'bg-red-500 hover:bg-red-600 animate-pulse'
-                          : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'
+                          : 'bg-blue-600 hover:bg-blue-700'
                       } shadow-2xl`}
                     >
                       {isRecording ? (
-                        <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-12 h-12 text-gray-900" fill="currentColor" viewBox="0 0 24 24">
                           <rect x="6" y="6" width="12" height="12" rx="2" />
                         </svg>
                       ) : (
-                        <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-12 h-12 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                         </svg>
                       )}
@@ -220,10 +220,10 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
                       {isRecording ? (
                         <div className="flex items-center gap-2">
                           <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                          <span className="text-2xl font-mono text-white">{formatTime(recordingTime)}</span>
+                          <span className="text-2xl font-mono text-gray-900">{formatTime(recordingTime)}</span>
                         </div>
                       ) : (
-                        <p className="text-slate-400">Click to start recording</p>
+                        <p className="text-gray-600">Click to start recording</p>
                       )}
                     </div>
                   </>
@@ -231,9 +231,9 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
                   <>
                     {/* Preview Recording */}
                     <div className="w-full mb-6">
-                      <h3 className="text-lg font-semibold text-white mb-3 text-center">Your Recording</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Your Recording</h3>
                       <audio src={audioUrl} controls className="w-full" />
-                      <p className="text-slate-400 text-sm text-center mt-2">
+                      <p className="text-gray-600 text-sm text-center mt-2">
                         Duration: {formatTime(recordingTime)}
                       </p>
                     </div>
@@ -243,14 +243,14 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
                       <button
                         onClick={resetRecording}
                         disabled={loading}
-                        className="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+                        className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold rounded-xl transition-colors disabled:opacity-50"
                       >
                         Record Again
                       </button>
                       <button
                         onClick={submitRecording}
                         disabled={loading}
-                        className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-semibold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2"
+                        className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-gray-900 font-semibold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2"
                       >
                         {loading ? (
                           <>
@@ -272,9 +272,9 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
               </div>
 
               {/* Tips */}
-              <div className="mt-8 p-4 bg-slate-700/30 rounded-xl">
-                <h4 className="text-sm font-semibold text-slate-300 mb-2">Tips for a good answer:</h4>
-                <ul className="text-slate-400 text-sm space-y-1">
+              <div className="mt-8 p-4 bg-gray-100 rounded-xl">
+                <h4 className="text-sm font-semibold text-gray-600 mb-2">Tips for a good answer:</h4>
+                <ul className="text-gray-600 text-sm space-y-1">
                   <li>- Speak clearly and at a natural pace</li>
                   <li>- Answer the question directly, then expand with details</li>
                   <li>- Use varied vocabulary and sentence structures</li>
@@ -287,30 +287,30 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
           /* Results View */
           <div className="space-y-6">
             {/* Assignment Question Reminder */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg">
                   <span className="text-2xl">📝</span>
                 </div>
                 <div className="flex-1">
-                  <span className="inline-block px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded mb-2">
+                  <span className="inline-block px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded mb-2">
                     {assignment.topic}
                   </span>
-                  <h3 className="text-lg font-bold text-white mb-2">Assignment Question</h3>
-                  <p className="text-slate-200 leading-relaxed">{assignment.question_text}</p>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Assignment Question</h3>
+                  <p className="text-gray-700 leading-relaxed">{assignment.question_text}</p>
                 </div>
               </div>
             </div>
 
             {/* Audio */}
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-              <h3 className="text-xl font-bold text-white mb-4">Your Recording</h3>
+            <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Your Recording</h3>
               {results.audio_data && <AudioPlayer audioData={results.audio_data} />}
             </div>
 
             {/* Relevance */}
             {(results.speech_score?.relevance || results.speech_score?.score_issue_list) && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                 <Relevance
                   relevance={results.speech_score.relevance}
                   scoreIssueList={results.speech_score.score_issue_list}
@@ -320,7 +320,7 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
 
             {/* Transcript */}
             {results.speech_score?.transcript && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                 {results.speech_score?.word_score_list ? (
                   <Transcript
                     transcript={results.speech_score.transcript}
@@ -330,8 +330,8 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
                   />
                 ) : (
                   <div>
-                    <h3 className="text-xl font-bold text-white mb-4">Transcript</h3>
-                    <p className="text-slate-300 leading-relaxed">{results.speech_score.transcript}</p>
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">Transcript</h3>
+                    <p className="text-gray-600 leading-relaxed">{results.speech_score.transcript}</p>
                   </div>
                 )}
               </div>
@@ -339,7 +339,7 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
 
             {/* Score & Detailed Feedback */}
             {(results.openai_result || results.combined_result) && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                 <FeedbackDetails
                   openaiResult={results.openai_result}
                   combinedResult={results.combined_result}
@@ -351,7 +351,7 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
 
             {/* Improved Answer - Check both new and legacy locations */}
             {(results.openai_result?.improved_answer || results.speech_score?.improved_answer) && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                 <ImprovedAnswer
                   improvedAnswerData={results.openai_result?.improved_answer || results.speech_score?.improved_answer}
                   originalTranscript={results.speech_score?.transcript}
@@ -363,12 +363,12 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
             {isSubmitted && (
               <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/50 rounded-2xl p-6 text-center">
                 <div className="flex items-center justify-center gap-3 mb-2">
-                  <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <h3 className="text-xl font-bold text-green-400">Assignment Submitted Successfully!</h3>
+                  <h3 className="text-xl font-bold text-green-600">Assignment Submitted Successfully!</h3>
                 </div>
-                <p className="text-slate-300">Your response has been recorded and evaluated. You can view your results anytime from the class page.</p>
+                <p className="text-gray-600">Your response has been recorded and evaluated. You can view your results anytime from the class page.</p>
               </div>
             )}
 
@@ -376,7 +376,7 @@ function AssignmentPractice({ assignment, onBack, onSubmitted }) {
             <div className="flex justify-center">
               <button
                 onClick={onBack}
-                className="px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg"
+                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-gray-900 font-bold rounded-xl transition-all duration-300 shadow-lg"
               >
                 Back to Class
               </button>

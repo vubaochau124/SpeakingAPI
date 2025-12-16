@@ -182,7 +182,7 @@ function AudioPlayer({ audioData }) {
   };
 
   return (
-    <div className="bg-gradient-to-r from-slate-800/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-600/50 shadow-xl">
+    <div className="bg-gray-100 rounded-2xl p-5 border border-gray-200 shadow-sm">
       <audio ref={audioRef} src={audioData} preload="metadata" />
 
       {/* Main Controls Row */}
@@ -190,7 +190,7 @@ function AudioPlayer({ audioData }) {
         {/* Play/Pause Button */}
         <button
           onClick={togglePlay}
-          className="w-14 h-14 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all duration-300 hover:scale-105 active:scale-95"
+          className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105 active:scale-95"
         >
           {isPlaying ? (
             <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -210,7 +210,7 @@ function AudioPlayer({ audioData }) {
         {/* Progress Section */}
         <div className="flex-1 space-y-2">
           {/* Time Display */}
-          <div className="flex justify-between text-xs text-slate-400 font-medium">
+          <div className="flex justify-between text-xs text-gray-500 font-medium">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
@@ -219,14 +219,14 @@ function AudioPlayer({ audioData }) {
           <div
             ref={progressRef}
             onClick={handleProgressClick}
-            className="relative h-2 bg-slate-600/50 rounded-full cursor-pointer group overflow-hidden"
+            className="relative h-2 bg-gray-300 rounded-full cursor-pointer group overflow-hidden"
           >
             {/* Background track */}
-            <div className="absolute inset-0 bg-slate-600/50 rounded-full" />
+            <div className="absolute inset-0 bg-gray-300 rounded-full" />
 
             {/* Progress fill */}
             <div
-              className="absolute h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-100"
+              className="absolute h-full bg-blue-600 rounded-full transition-all duration-100"
               style={{ width: `${progressPercent}%` }}
             />
 
@@ -246,7 +246,7 @@ function AudioPlayer({ audioData }) {
           {/* Skip Backward */}
           <button
             onClick={() => skipTime(-5)}
-            className="w-9 h-9 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200 hover:scale-105"
+            className="w-9 h-9 rounded-lg bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all duration-200 hover:scale-105"
             title="Rewind 5s"
           >
             <svg
@@ -267,7 +267,7 @@ function AudioPlayer({ audioData }) {
           {/* Skip Forward */}
           <button
             onClick={() => skipTime(5)}
-            className="w-9 h-9 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200 hover:scale-105"
+            className="w-9 h-9 rounded-lg bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all duration-200 hover:scale-105"
             title="Forward 5s"
           >
             <svg
@@ -288,7 +288,7 @@ function AudioPlayer({ audioData }) {
           {/* Speed Control */}
           <button
             onClick={handleSpeedChange}
-            className="h-9 px-3 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200 hover:scale-105 text-xs font-bold min-w-[48px]"
+            className="h-9 px-3 rounded-lg bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all duration-200 hover:scale-105 text-xs font-bold min-w-[48px]"
             title="Playback speed"
           >
             {playbackRate}x
@@ -299,7 +299,7 @@ function AudioPlayer({ audioData }) {
             <button
               onClick={() => setShowVolume(!showVolume)}
               onBlur={() => setTimeout(() => setShowVolume(false), 200)}
-              className="w-9 h-9 rounded-lg bg-slate-700/50 hover:bg-slate-600/50 flex items-center justify-center text-slate-400 hover:text-white transition-all duration-200 hover:scale-105"
+              className="w-9 h-9 rounded-lg bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-all duration-200 hover:scale-105"
               title="Volume"
             >
               {getVolumeIcon()}
@@ -307,7 +307,7 @@ function AudioPlayer({ audioData }) {
 
             {/* Volume Slider Popup */}
             {showVolume && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-slate-800 border border-slate-600 rounded-xl shadow-xl">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-white border border-gray-200 rounded-xl shadow-xl">
                 <input
                   type="range"
                   min="0"
@@ -315,7 +315,7 @@ function AudioPlayer({ audioData }) {
                   step="0.1"
                   value={volume}
                   onChange={handleVolumeChange}
-                  className="w-24 h-2 appearance-none bg-slate-600 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:bg-cyan-400 [&::-webkit-slider-thumb]:transition-colors"
+                  className="w-24 h-2 appearance-none bg-gray-300 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:bg-blue-500 [&::-webkit-slider-thumb]:transition-colors"
                 />
                 <div className="text-center text-xs text-slate-400 mt-1">
                   {Math.round(volume * 100)}%

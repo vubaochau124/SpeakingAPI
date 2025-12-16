@@ -638,18 +638,32 @@ class AzureSpeechAPI:
             return result
         return result.get('text', '')
 
-    def assess_pronunciation_only(self, wav_path, transcript, language='en-US'):
-        """Pass 2 only: Run pronunciation assessment with given transcript."""
+    def assess_pronunciation_only(self, wav_path, transcript, language='en-US', whisper_words=None):
+        """Pass 2 only: Run pronunciation assessment with given transcript.
+
+        Args:
+            wav_path: Path to WAV file
+            transcript: Transcript text
+            language: Language code
+            whisper_words: Optional list of {'word': str, 'start': float, 'end': float} for word mapping
+        """
         result = self._run_continuous_assessment(wav_path, transcript, language)
         fluency_metrics = self._calculate_fluency_metrics(result['words'], result['duration_sec'])
 
         print(f"[AZURE] assess_pronunciation_only raw scores from _run_continuous_assessment: {result['scores']}", flush=True)
 
+        # Map Whisper words to Azure words if available
+        if whisper_words:
+            mapped_words = self._map_whisper_to_azure_words(whisper_words, result['words'], transcript)
+            print(f"[AZURE] Mapped {len(result['words'])} Azure words -> {len(mapped_words)} combined words")
+        else:
+            mapped_words = result['words']
+
         return {
             'status': 'success',
             'speech_score': {
-                'transcript': result['transcript'] or transcript,
-                'word_score_list': result['words'],
+                'transcript': transcript,  # Use Whisper's transcript (has filler words, punctuation)
+                'word_score_list': mapped_words,
                 'scores': {
                     'pronunciation': result['scores']['pronunciation'],
                     'fluency': result['scores']['fluency'],
@@ -911,6 +925,170 @@ class AzureSpeechAPI:
             'duration_sec': total_duration
         }
 
+    def _map_whisper_to_azure_words(self, whisper_words, azure_words, full_transcript=''):
+        """Map Whisper words to Azure word results to preserve filler words, casing, and punctuation.
+
+        Whisper captures filler words (ah, um, hmm) and has better casing/punctuation.
+        Azure has pronunciation scores but may miss fillers.
+
+        Strategy:
+        1. Extract words WITH punctuation from full transcript (whisper_words only has raw words)
+        2. Match transcript words with whisper timestamps by index
+        3. For each word, try to find matching Azure word by time/text
+        4. If match found: use transcript's text (with punctuation) + Azure's scores
+        5. If no match (filler word): insert word without scores
+
+        Args:
+            whisper_words: List of {'word': str, 'start': float, 'end': float} from Whisper
+            azure_words: List of word dicts from Azure with pronunciation scores
+            full_transcript: Full transcript text with punctuation
+
+        Returns:
+            list: Combined word list with Whisper's text and Azure's scores where available
+        """
+        if not whisper_words:
+            return azure_words
+
+        # Extract words WITH punctuation from full transcript
+        # Split on whitespace but keep punctuation attached to words
+        if full_transcript:
+            transcript_tokens = full_transcript.split()
+        else:
+            transcript_tokens = [w.get('word', '') for w in whisper_words]
+
+        # Match transcript tokens with whisper word timestamps
+        # Build a list of (word_with_punctuation, start, end)
+        words_with_timing = []
+        whisper_idx = 0
+
+        for token in transcript_tokens:
+            token_clean = re.sub(r'[^\w\']', '', token).lower()
+            if not token_clean:
+                continue
+
+            # Find matching whisper word by text
+            best_match_idx = None
+            for i in range(whisper_idx, min(whisper_idx + 5, len(whisper_words))):
+                w = whisper_words[i]
+                w_text = w.get('word', '').strip()
+                w_clean = re.sub(r'[^\w\']', '', w_text).lower()
+                if w_clean == token_clean or token_clean in w_clean or w_clean in token_clean:
+                    best_match_idx = i
+                    break
+
+            if best_match_idx is not None:
+                w = whisper_words[best_match_idx]
+                words_with_timing.append({
+                    'word': token,  # Token from transcript (has punctuation)
+                    'start': w.get('start', 0),
+                    'end': w.get('end', 0)
+                })
+                whisper_idx = best_match_idx + 1
+            else:
+                # No timing match - use token without timing (shouldn't happen often)
+                if whisper_idx < len(whisper_words):
+                    w = whisper_words[whisper_idx]
+                    words_with_timing.append({
+                        'word': token,
+                        'start': w.get('start', 0),
+                        'end': w.get('end', 0)
+                    })
+
+        if not azure_words:
+            # No Azure words - create entries for Whisper words without scores
+            result = []
+            for w in words_with_timing:
+                result.append({
+                    'Word': w.get('word', ''),
+                    'Offset': int(w.get('start', 0) * 10000000),
+                    'Duration': int((w.get('end', 0) - w.get('start', 0)) * 10000000),
+                    'AccuracyScore': None,
+                    'ErrorType': 'NoAzureScore',
+                    'Phonemes': [],
+                    'Syllables': []
+                })
+            return result
+
+        result = []
+        azure_idx = 0
+
+        # Common filler words that Azure typically misses
+        filler_patterns = {'hmm', 'hm', 'um', 'uh', 'ah', 'er', 'eh', 'oh', 'mm', 'mhm', 'erm'}
+
+        for word_info in words_with_timing:
+            whisper_text = word_info.get('word', '').strip()
+            whisper_text_clean = re.sub(r'[^\w\']', '', whisper_text).lower()
+            whisper_start = word_info.get('start', 0)
+            whisper_end = word_info.get('end', 0)
+
+            # Skip empty words
+            if not whisper_text_clean:
+                continue
+
+            # Try to find matching Azure word
+            best_match = None
+            best_match_idx = None
+            best_score = -1
+
+            # Search in a window around current position
+            search_start = max(0, azure_idx - 2)
+            search_end = min(len(azure_words), azure_idx + 8)
+
+            for i in range(search_start, search_end):
+                azure_word = azure_words[i]
+                azure_text = azure_word.get('Word', '').lower().strip()
+                azure_text_clean = re.sub(r'[^\w\']', '', azure_text)
+                azure_start = azure_word.get('Offset', 0) / 10000000  # Convert 100ns to seconds
+
+                # Calculate similarity
+                time_diff = abs(whisper_start - azure_start)
+
+                # Text matching - check various conditions
+                text_match = 0
+                if whisper_text_clean == azure_text_clean:
+                    text_match = 1.0
+                elif azure_text_clean in whisper_text_clean or whisper_text_clean in azure_text_clean:
+                    text_match = 0.8
+                elif len(whisper_text_clean) > 2 and len(azure_text_clean) > 2 and whisper_text_clean[:3] == azure_text_clean[:3]:
+                    # Partial match at start (handles "and" vs "an" type errors)
+                    text_match = 0.5
+
+                # Score: prioritize text match, then time proximity
+                if text_match > 0 and time_diff < 2.0:  # Within 2 seconds
+                    score = text_match * 10 - time_diff
+                    if score > best_score:
+                        best_score = score
+                        best_match = azure_word
+                        best_match_idx = i
+
+            if best_match and best_score > 0:
+                # Found matching Azure word - use transcript's text (with punctuation) + Azure's scores
+                word_entry = dict(best_match)
+                word_entry['Word'] = whisper_text  # Use transcript word with punctuation
+                word_entry['_whisper_word'] = whisper_text
+                word_entry['_azure_word'] = best_match.get('Word', '')
+                result.append(word_entry)
+                azure_idx = best_match_idx + 1
+            else:
+                # No matching Azure word - this is likely a filler word
+                # Add it without pronunciation scores
+                word_entry = {
+                    'Word': whisper_text,
+                    'Offset': int(whisper_start * 10000000),
+                    'Duration': int((whisper_end - whisper_start) * 10000000),
+                    'AccuracyScore': None,  # No score for filler words
+                    'ErrorType': 'Filler' if whisper_text_clean in filler_patterns else 'NoMatch',
+                    'Phonemes': [],
+                    'Syllables': [],
+                    '_is_filler': True,
+                    '_whisper_word': whisper_text
+                }
+                result.append(word_entry)
+
+        print(f"[AZURE] Mapped {len(words_with_timing)} transcript words to {len(azure_words)} Azure words -> {len(result)} combined words")
+
+        return result
+
     def assess_pronunciation_chunked(self, wav_path, transcript, language='en-US', max_workers=None, whisper_result=None):
         """Run pronunciation assessment with parallel chunk processing for long audio.
 
@@ -941,10 +1119,12 @@ class AzureSpeechAPI:
         word_timestamps = whisper_result.get('words', [])
         whisper_transcript = whisper_result.get('text', '')
 
-        # Use Whisper transcript if none provided
+        # Use Whisper transcript if none provided - Whisper is the source of truth for transcript
         if not transcript and whisper_transcript:
             transcript = whisper_transcript
-            print(f"[AZURE-CHUNKED] Using Whisper transcript: {transcript[:80]}...")
+        # Always prefer Whisper transcript as it has better filler words, casing, punctuation
+        original_whisper_transcript = whisper_transcript
+        print(f"[AZURE-CHUNKED] Whisper transcript: {whisper_transcript[:100]}..." if whisper_transcript else "[AZURE-CHUNKED] No Whisper transcript")
 
         # Step 2: Find sentence boundaries from word timestamps
         sentence_boundaries = self._find_sentence_boundaries(word_timestamps) if word_timestamps else None
@@ -957,7 +1137,7 @@ class AzureSpeechAPI:
         # If only one chunk, use regular assessment
         if len(chunks) == 1 and chunks[0][0] == wav_path:
             print(f"[AZURE-CHUNKED] Single chunk, using regular assessment")
-            return self.assess_pronunciation_only(wav_path, transcript, language)
+            return self.assess_pronunciation_only(wav_path, transcript, language, whisper_words=word_timestamps)
 
         # Step 4: Split transcript into chunks using word timestamps (more accurate)
         chunk_word_lists = []
@@ -1025,12 +1205,28 @@ class AzureSpeechAPI:
                     chunk_results.append(result)
 
             # Merge results
+            print(f"[AZURE-CHUNKED] Collected {len(chunk_results)} chunk results (expected {len(chunks)})")
+            for i, cr in enumerate(chunk_results):
+                cr_result = cr.get('result')
+                cr_error = cr.get('error')
+                if cr_error:
+                    print(f"[AZURE-CHUNKED]   Chunk {cr.get('chunk_index', i)}: ERROR - {cr_error}")
+                else:
+                    cr_words = cr_result.get('words', []) if cr_result else []
+                    print(f"[AZURE-CHUNKED]   Chunk {cr.get('chunk_index', i)}: {len(cr_words)} words")
+
             merged_result = self._merge_chunk_results(chunk_results)
+            transcript_words_count = len(transcript.split()) if transcript else 0
+            print(f"[AZURE-CHUNKED] Merged result: {len(merged_result['words'])} Azure words (transcript has {transcript_words_count} words)")
+
+            # Map Whisper words to Azure words to preserve filler words, casing, and punctuation
+            mapped_words = self._map_whisper_to_azure_words(word_timestamps, merged_result['words'], transcript)
+            print(f"[AZURE-CHUNKED] After mapping: {len(mapped_words)} words (includes fillers from Whisper)")
 
             elapsed = time.time() - start_time
             print(f"[AZURE-CHUNKED] Total time: {elapsed:.2f}s for {len(chunks)} chunks")
 
-            # Calculate fluency metrics
+            # Calculate fluency metrics (use original Azure words for accurate metrics)
             fluency_metrics = self._calculate_fluency_metrics(
                 merged_result['words'],
                 merged_result['duration_sec']
@@ -1039,8 +1235,8 @@ class AzureSpeechAPI:
             return {
                 'status': 'success',
                 'speech_score': {
-                    'transcript': merged_result['transcript'] or transcript,
-                    'word_score_list': merged_result['words'],
+                    'transcript': transcript,  # Use Whisper's transcript (has filler words, punctuation)
+                    'word_score_list': mapped_words,  # Use mapped words with Whisper's text and Azure's scores
                     'scores': {
                         'pronunciation': merged_result['scores']['pronunciation'],
                         'fluency': merged_result['scores']['fluency'],

@@ -29,7 +29,7 @@ function FluencyDetails({ fluency }) {
         </div>
         <div className="h-8 w-px bg-slate-600"></div>
         <div>
-          <p className="text-2xl font-bold text-blue-400">
+          <p className="text-2xl font-bold text-blue-600">
             {duration !== null && duration !== undefined ? duration.toFixed(1) : '0.0'}s
           </p>
           <p className="text-xs text-slate-500">total duration</p>
@@ -136,13 +136,13 @@ function FluencyDetails({ fluency }) {
           {fluency.duration && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
               <p className="text-slate-400 text-sm">Total Duration</p>
-              <p className="text-2xl font-bold text-blue-400">{fluency.duration.toFixed(2)}s</p>
+              <p className="text-2xl font-bold text-blue-600">{fluency.duration.toFixed(2)}s</p>
             </div>
           )}
           {fluency.articulation_length && (
             <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
               <p className="text-slate-400 text-sm">Articulation Length</p>
-              <p className="text-2xl font-bold text-cyan-400">{fluency.articulation_length.toFixed(2)}s</p>
+              <p className="text-2xl font-bold text-cyan-600">{fluency.articulation_length.toFixed(2)}s</p>
             </div>
           )}
         </div>

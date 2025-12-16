@@ -24,7 +24,7 @@ const ImprovedAnswer = ({ improvedAnswerData, originalTranscript }) => {
             <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
               📝 Improved Answer Suggestion
             </h3>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-400 text-black text-sm leading-relaxed">
               This is an AI-generated improved version of your answer with grammar corrections,
               better vocabulary, and enhanced coherence.
             </p>
@@ -89,7 +89,7 @@ const ImprovedAnswer = ({ improvedAnswerData, originalTranscript }) => {
           )}
 
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
-            <p className="text-amber-200/90 text-sm leading-relaxed">
+            <p className="text-amber-200 text-sm leading-relaxed">
               <strong className="font-semibold">Note:</strong> This suggestion is meant for learning purposes.
               Use it to understand how to improve your English speaking skills.
             </p>

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List, Any
 from datetime import datetime
 
@@ -9,6 +9,26 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: str = 'student'  # 'student' or 'teacher'
+
+    @field_validator('username')
+    @classmethod
+    def username_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Username cannot be empty')
+        if len(v.strip()) < 2:
+            raise ValueError('Username must be at least 2 characters')
+        if len(v.strip()) > 50:
+            raise ValueError('Username must be at most 50 characters')
+        return v.strip()
+
+    @field_validator('password')
+    @classmethod
+    def password_not_empty(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Password cannot be empty')
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
 
 
 class UserLogin(BaseModel):

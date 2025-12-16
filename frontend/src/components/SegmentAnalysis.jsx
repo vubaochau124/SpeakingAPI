@@ -11,9 +11,9 @@ function SegmentAnalysis({ segmentMetrics }) {
   };
 
   const getScoreTextColor = (score) => {
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 60) return 'text-amber-400';
-    return 'text-red-400';
+    if (score >= 80) return 'text-emerald-600';
+    if (score >= 60) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   // Calculate total duration for timeline visualization

@@ -16,6 +16,10 @@ print(f"[STARTUP] AZURE_SPEECH_REGION: {os.getenv('AZURE_SPEECH_REGION', 'not se
 print(f"[STARTUP] OPENAI_API_KEY present: {bool(os.getenv('OPENAI_API_KEY'))}")
 print(f"[STARTUP] DATABASE_URL present: {bool(os.getenv('DATABASE_URL'))}")
 
+# Clear prompt caches on startup to ensure fresh prompts
+from openai_evaluator import clear_prompt_caches
+clear_prompt_caches()
+
 # Initialize database
 from database import init_db, engine
 try:
@@ -76,8 +80,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:6969",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:6969",
         "https://verify-certificate.sotatek.works",
         "https://127.0.0.1:8001"
     ],
@@ -94,6 +100,7 @@ from routes.admin import router as admin_router
 from routes.classes import router as classes_router
 from routes.assignments import router as assignments_router
 from routes.evaluation import router as evaluation_router
+from routes.progress import router as progress_router
 
 app.include_router(auth_router)
 app.include_router(content_router)
@@ -102,6 +109,7 @@ app.include_router(admin_router)
 app.include_router(classes_router)
 app.include_router(assignments_router)
 app.include_router(evaluation_router)
+app.include_router(progress_router)
 
 # Serve frontend static files (for production)
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')

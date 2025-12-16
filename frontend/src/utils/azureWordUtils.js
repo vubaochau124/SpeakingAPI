@@ -28,10 +28,31 @@ export function getWord(wordInfo) {
 /**
  * Get quality/accuracy score for a word
  * @param {Object} wordInfo - Raw Azure word object
- * @returns {number} - Score (0-100)
+ * @returns {number|null} - Score (0-100), or null if no score available (filler words)
  */
 export function getWordScore(wordInfo) {
-  return wordInfo?.PronunciationAssessment?.AccuracyScore ?? 0;
+  // Check for filler words that don't have pronunciation scores
+  if (wordInfo?._is_filler || wordInfo?.ErrorType === 'Filler' || wordInfo?.ErrorType === 'NoMatch') {
+    return null;
+  }
+  // Check direct AccuracyScore (from backend mapping)
+  if (wordInfo?.AccuracyScore !== undefined && wordInfo?.AccuracyScore !== null) {
+    return wordInfo.AccuracyScore;
+  }
+  // Standard Azure format
+  return wordInfo?.PronunciationAssessment?.AccuracyScore ?? null;
+}
+
+/**
+ * Check if a word is a filler word (no pronunciation score)
+ * @param {Object} wordInfo - Raw Azure word object
+ * @returns {boolean} - True if filler word
+ */
+export function isFillerWord(wordInfo) {
+  return wordInfo?._is_filler === true ||
+         wordInfo?.ErrorType === 'Filler' ||
+         wordInfo?.ErrorType === 'NoMatch' ||
+         wordInfo?.AccuracyScore === null;
 }
 
 /**

@@ -92,9 +92,9 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
   // Get color class based on quality score
   const getWordColor = (score) => {
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 60) return 'text-amber-400';
-    return 'text-red-400';
+    if (score >= 80) return 'text-emerald-600';
+    if (score >= 60) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   const getWordBgColor = (score) => {
@@ -104,9 +104,9 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
   };
 
   const getScoreColor = (score) => {
-    if (score >= 80) return 'text-emerald-400';
-    if (score >= 60) return 'text-amber-400';
-    return 'text-red-400';
+    if (score >= 80) return 'text-emerald-600';
+    if (score >= 60) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   const formatScore = (score) => {
@@ -225,7 +225,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                   {/* Line Header */}
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
-                      <span className="text-cyan-400 font-bold text-sm">{idx + 1}</span>
+                      <span className="text-cyan-600 font-bold text-sm">{idx + 1}</span>
                     </div>
                     <span className="text-slate-400 text-sm">Expected:</span>
                   </div>
@@ -304,7 +304,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                 <span className="text-2xl">🚀</span>
                 <p className="text-slate-300 text-sm font-medium">Speech Rate</p>
               </div>
-              <p className="text-3xl font-bold text-emerald-400">
+              <p className="text-3xl font-bold text-emerald-600">
                 {textScore.fluency.overall_metrics.speech_rate?.toFixed(2)}
               </p>
               <p className="text-xs text-slate-400 mt-1">words/second</p>
@@ -315,7 +315,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                 <span className="text-2xl">💬</span>
                 <p className="text-slate-300 text-sm font-medium">Articulation Rate</p>
               </div>
-              <p className="text-3xl font-bold text-cyan-400">
+              <p className="text-3xl font-bold text-cyan-600">
                 {textScore.fluency.overall_metrics.articulation_rate?.toFixed(2)}
               </p>
               <p className="text-xs text-slate-400 mt-1">syllables/second</p>
@@ -326,7 +326,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                 <span className="text-2xl">⏱️</span>
                 <p className="text-slate-300 text-sm font-medium">Words Per Min</p>
               </div>
-              <p className="text-3xl font-bold text-blue-400">
+              <p className="text-3xl font-bold text-blue-600">
                 {textScore.fluency.overall_metrics.word_correct_per_minute?.toFixed(0)}
               </p>
               <p className="text-xs text-slate-400 mt-1">correct wpm</p>
@@ -377,7 +377,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
             {/* Error Type */}
             {getErrorType(selectedWord) && (
               <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
-                <span className="text-red-400 font-medium">
+                <span className="text-red-600 font-medium">
                   Issue: {getErrorType(selectedWord).replace(/_/g, ' ')}
                 </span>
               </div>
@@ -446,7 +446,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                     {getPhonemes(selectedWord).map((phone, index) => (
                       <tr key={index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                         <td className="py-2 px-3">
-                          <span className="text-lg font-bold text-cyan-400">
+                          <span className="text-lg font-bold text-cyan-600">
                             /{getPhonemeText(phone)}/
                           </span>
                         </td>
