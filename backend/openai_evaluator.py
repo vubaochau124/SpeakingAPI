@@ -96,7 +96,7 @@ Return JSON with DETAILED justification:
     "reason_for_score": "<IELTS lexical justification>",
   },
   "band": <float 1.0-9.0>,
-  "level": <1-5 which level they match>,
+  "level": <1-5 which level they match>
 }
 """
 
