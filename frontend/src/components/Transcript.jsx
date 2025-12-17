@@ -14,15 +14,86 @@ import {
   isFillerWord
 } from '../utils/azureWordUtils';
 
+// Default voice preference by language
+const DEFAULT_VOICE_PREFERENCES = {
+  'en': 'Microsoft EmmaMultilingual',
+  'zh': 'Microsoft',
+  'ja': 'Microsoft',
+  'ko': 'Microsoft',
+};
+
 function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
   const [selectedWord, setSelectedWord] = useState(null);
 
   // Only show phonemes for English
   const showPhonemes = language?.startsWith('en');
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef(null);
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
   const audioContextRef = useRef(null);
   const audioBufferRef = useRef(null);
+
+  // Load available voices for current language
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = speechSynthesis.getVoices();
+      const langPrefix = language?.split('-')[0] || 'en';
+      let filteredVoices = voices.filter(v => v.lang.startsWith(langPrefix));
+
+      // Sort: Preferred voice first (EmmaMultilingual for English), then Microsoft, then Google, then others
+      const preferredVoice = DEFAULT_VOICE_PREFERENCES[langPrefix] || 'Microsoft';
+      filteredVoices.sort((a, b) => {
+        // Preferred voice (EmmaMultilingual for English) first
+        if (a.name.includes(preferredVoice) && !b.name.includes(preferredVoice)) return -1;
+        if (!a.name.includes(preferredVoice) && b.name.includes(preferredVoice)) return 1;
+        // Then Microsoft voices
+        if (a.name.includes('Microsoft') && !b.name.includes('Microsoft')) return -1;
+        if (!a.name.includes('Microsoft') && b.name.includes('Microsoft')) return 1;
+        // Then Google voices
+        if (a.name.includes('Google') && !b.name.includes('Google')) return -1;
+        if (!a.name.includes('Google') && b.name.includes('Google')) return 1;
+        return 0;
+      });
+
+      setAvailableVoices(filteredVoices.length > 0 ? filteredVoices : voices.slice(0, 10));
+      setSelectedVoiceIndex(0); // First voice is the preferred one after sorting
+    };
+
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      speechSynthesis.onvoiceschanged = null;
+    };
+  }, [language]);
+
+  // Web Speech API TTS - Fast and customizable
+  const playTTS = (text) => {
+    if (isTTSPlaying || !('speechSynthesis' in window)) return;
+
+    // Cancel any ongoing speech
+    speechSynthesis.cancel();
+
+    setIsTTSPlaying(true);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language || 'en-US';
+    utterance.rate = 0.85;
+    utterance.pitch = 1;
+
+    // Use selected voice if available
+    if (availableVoices.length > 0 && availableVoices[selectedVoiceIndex]) {
+      utterance.voice = availableVoices[selectedVoiceIndex];
+    }
+
+    utterance.onend = () => setIsTTSPlaying(false);
+    utterance.onerror = () => setIsTTSPlaying(false);
+    speechSynthesis.speak(utterance);
+  };
+
+  const handleVoiceChange = (e) => {
+    setSelectedVoiceIndex(Number(e.target.value));
+  };
 
   // Load audio buffer when audioData changes
   useEffect(() => {
@@ -32,6 +103,10 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
     return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close();
+      }
+      // Cancel any ongoing speech synthesis
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
       }
     };
   }, [audioData]);
@@ -181,24 +256,64 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
               </button>
             </div>
 
-            {/* Play Button */}
-            {audioData && (
+            {/* Voice Selector */}
+            {availableVoices.length > 1 && (
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500 whitespace-nowrap">Voice:</span>
+                <select
+                  value={selectedVoiceIndex}
+                  onChange={handleVoiceChange}
+                  className="flex-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all cursor-pointer border-none outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {availableVoices.map((voice, index) => (
+                    <option key={index} value={index}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Play Buttons */}
+            <div className="flex gap-2 mb-4">
+              {/* TTS - Correct Pronunciation */}
               <button
-                onClick={() => playWordAudio(selectedWord)}
-                disabled={isPlaying}
-                className="w-full mb-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={() => playTTS(getWord(selectedWord))}
+                disabled={isTTSPlaying}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                title="Hear correct pronunciation"
               >
-                {isPlaying ? (
+                {isTTSPlaying ? (
                   <>
-                    <span className="animate-pulse">🔊</span> Playing...
+                    <span className="animate-pulse">🎯</span> Playing...
                   </>
                 ) : (
                   <>
-                    <span>🔊</span> Hear "{getWord(selectedWord)}"
+                    <span>🎯</span> Correct
                   </>
                 )}
               </button>
-            )}
+
+              {/* User Recording */}
+              {audioData && (
+                <button
+                  onClick={() => playWordAudio(selectedWord)}
+                  disabled={isPlaying}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  title="Hear your pronunciation"
+                >
+                  {isPlaying ? (
+                    <>
+                      <span className="animate-pulse">🔊</span> Playing...
+                    </>
+                  ) : (
+                    <>
+                      <span>🔊</span> Your voice
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {/* Syllables - only show if syllables have text */}
             {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).length > 0 && (

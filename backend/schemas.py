@@ -255,3 +255,85 @@ class AssignmentWithSubmissionsResponse(BaseModel):
     total_students: int
     submitted_count: int
     submissions: List[StudentSubmissionResponse] = []
+
+
+# ============================================================================
+# AI Conversation schemas
+# ============================================================================
+
+class AIConversationStartRequest(BaseModel):
+    topic_id: Optional[int] = None
+    custom_topic: Optional[str] = None
+    language: str = 'en-US'
+
+
+class AIConversationStartResponse(BaseModel):
+    session_id: int
+    ai_message: str
+    ai_audio_url: Optional[str] = None
+    topic: str
+
+
+class AIConversationTurnResponse(BaseModel):
+    user_transcript: str
+    ai_text: str
+    ai_audio_url: Optional[str] = None
+    turn_number: int
+
+
+class AIConversationEndResponse(BaseModel):
+    overall_band: float
+    summary: dict
+    encouragement: str
+    turn_count: int
+    duration_minutes: Optional[float] = None
+    pronunciation_score: Optional[float] = None
+
+
+class AITopicResponse(BaseModel):
+    id: int
+    name: str
+    name_vi: Optional[str] = None
+    description: Optional[str] = None
+    language: str
+
+
+class AISessionHistoryItem(BaseModel):
+    id: int
+    topic: str
+    language: str
+    status: str
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    final_scores: Optional[dict] = None
+    turn_count: int
+
+
+class AITopicCreateRequest(BaseModel):
+    name: str
+    name_vi: Optional[str] = None
+    description: Optional[str] = None
+    system_prompt: str
+    opening_message: str
+    language: str = 'en-US'
+
+
+class AITopicUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    name_vi: Optional[str] = None
+    description: Optional[str] = None
+    system_prompt: Optional[str] = None
+    opening_message: Optional[str] = None
+    language: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AITopicAdminResponse(BaseModel):
+    id: int
+    name: str
+    name_vi: Optional[str] = None
+    description: Optional[str] = None
+    system_prompt: str
+    opening_message: str
+    language: str
+    is_active: bool
