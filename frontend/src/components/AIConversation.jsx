@@ -9,6 +9,14 @@ const SUPPORTED_LANGUAGES = [
   { code: 'ko-KR', label: '한국어' },
 ];
 
+// Default voice preference by language
+const DEFAULT_VOICE_PREFERENCES = {
+  'en': 'Microsoft EmmaMultilingual',
+  'zh': 'Microsoft',
+  'ja': 'Microsoft',
+  'ko': 'Microsoft',
+};
+
 function AIConversation() {
   const { getAuthHeaders } = useAuth();
 
@@ -35,18 +43,55 @@ function AIConversation() {
   // Final results
   const [finalResults, setFinalResults] = useState(null);
 
+  // TTS state - Web Speech API only
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
+
   // Refs
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
   const messagesEndRef = useRef(null);
   const recordingTimerRef = useRef(null);
-  const currentAudioRef = useRef(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Load available voices for Web Speech API
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = speechSynthesis.getVoices();
+      const langPrefix = language.split('-')[0]; // 'en', 'zh', 'ja', 'ko'
+      let filteredVoices = voices.filter(v => v.lang.startsWith(langPrefix));
+
+      // Sort: Preferred voice first, then Microsoft, then Google, then others
+      const preferredVoice = DEFAULT_VOICE_PREFERENCES[langPrefix] || 'Microsoft';
+      filteredVoices.sort((a, b) => {
+        // Preferred voice (EmmaMultilingual for English) first
+        if (a.name.includes(preferredVoice) && !b.name.includes(preferredVoice)) return -1;
+        if (!a.name.includes(preferredVoice) && b.name.includes(preferredVoice)) return 1;
+        // Then Microsoft voices
+        if (a.name.includes('Microsoft') && !b.name.includes('Microsoft')) return -1;
+        if (!a.name.includes('Microsoft') && b.name.includes('Microsoft')) return 1;
+        // Then Google voices
+        if (a.name.includes('Google') && !b.name.includes('Google')) return -1;
+        if (!a.name.includes('Google') && b.name.includes('Google')) return 1;
+        return 0;
+      });
+
+      setAvailableVoices(filteredVoices.length > 0 ? filteredVoices : voices.slice(0, 10));
+      setSelectedVoiceIndex(0); // First voice is the preferred one after sorting
+    };
+
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      speechSynthesis.onvoiceschanged = null;
+    };
+  }, [language]);
 
   // Fetch topics on mount
   useEffect(() => {
@@ -56,12 +101,12 @@ function AIConversation() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current = null;
-      }
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
+      }
+      // Cancel any ongoing speech synthesis
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
       }
       setIsAIPlaying(false);
     };
@@ -99,13 +144,12 @@ function AIConversation() {
       // Add AI's opening message
       setMessages([{
         role: 'ai',
-        text: response.data.ai_message,
-        audioUrl: response.data.ai_audio_url
+        text: response.data.ai_message
       }]);
 
-      // Auto-play AI audio
-      if (response.data.ai_audio_url) {
-        playAudio(response.data.ai_audio_url);
+      // Auto-play AI audio using Web Speech API
+      if (response.data.ai_message) {
+        playTTS(response.data.ai_message);
       }
 
     } catch (err) {
@@ -116,32 +160,27 @@ function AIConversation() {
     }
   };
 
-  const playAudio = (url, autoPlay = true) => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
+  // Web Speech API TTS
+  const playTTS = (text) => {
+    if (!('speechSynthesis' in window) || !text) return;
+
+    // Cancel any ongoing speech
+    speechSynthesis.cancel();
+
+    setIsAIPlaying(true);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language;
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+
+    // Use selected voice if available
+    if (availableVoices.length > 0 && availableVoices[selectedVoiceIndex]) {
+      utterance.voice = availableVoices[selectedVoiceIndex];
     }
 
-    if (!url) return;
-
-    const audio = new Audio(url);
-    currentAudioRef.current = audio;
-
-    // Track AI audio playing state
-    audio.onplay = () => setIsAIPlaying(true);
-    audio.onended = () => setIsAIPlaying(false);
-    audio.onpause = () => setIsAIPlaying(false);
-    audio.onerror = () => {
-      setIsAIPlaying(false);
-      console.log('Audio playback error');
-    };
-
-    if (autoPlay) {
-      audio.play().catch(err => {
-        console.log('Audio autoplay blocked:', err);
-        setIsAIPlaying(false);
-      });
-    }
+    utterance.onend = () => setIsAIPlaying(false);
+    utterance.onerror = () => setIsAIPlaying(false);
+    speechSynthesis.speak(utterance);
   };
 
   const startRecording = async () => {
@@ -231,15 +270,14 @@ function AIConversation() {
         // Add AI response
         updated.push({
           role: 'ai',
-          text: response.data.ai_text,
-          audioUrl: response.data.ai_audio_url
+          text: response.data.ai_text
         });
         return updated;
       });
 
-      // Auto-play AI response
-      if (response.data.ai_audio_url) {
-        playAudio(response.data.ai_audio_url);
+      // Auto-play AI response using Web Speech API
+      if (response.data.ai_text) {
+        playTTS(response.data.ai_text);
       }
 
     } catch (err) {
@@ -460,6 +498,24 @@ function AIConversation() {
         </button>
       </div>
 
+      {/* Voice Selector Bar */}
+      {availableVoices.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 border-b border-gray-200 text-sm">
+          <span className="text-gray-500">Voice:</span>
+          <select
+            value={selectedVoiceIndex}
+            onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
+            className="flex-1 max-w-md px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500"
+          >
+            {availableVoices.map((voice, index) => (
+              <option key={index} value={index}>
+                {voice.name} ({voice.lang})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
         {messages.map((msg, idx) => (
@@ -483,9 +539,9 @@ function AIConversation() {
               ) : (
                 <>
                   <p className="leading-relaxed">{msg.text}</p>
-                  {msg.audioUrl && msg.role === 'ai' && (
+                  {msg.role === 'ai' && msg.text && (
                     <button
-                      onClick={() => playAudio(msg.audioUrl)}
+                      onClick={() => playTTS(msg.text)}
                       className="mt-2 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

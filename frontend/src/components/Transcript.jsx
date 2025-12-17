@@ -14,6 +14,14 @@ import {
   isFillerWord
 } from '../utils/azureWordUtils';
 
+// Default voice preference by language
+const DEFAULT_VOICE_PREFERENCES = {
+  'en': 'Microsoft EmmaMultilingual',
+  'zh': 'Microsoft',
+  'ja': 'Microsoft',
+  'ko': 'Microsoft',
+};
+
 function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
   const [selectedWord, setSelectedWord] = useState(null);
 
@@ -23,27 +31,33 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
-  const audioRef = useRef(null);
   const audioContextRef = useRef(null);
   const audioBufferRef = useRef(null);
 
-  // Load available English voices
+  // Load available voices for current language
   useEffect(() => {
     const loadVoices = () => {
       const voices = speechSynthesis.getVoices();
-      // Filter for English voices only
-      const englishVoices = voices.filter(v =>
-        v.lang.startsWith('en') &&
-        (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('English') || v.lang === 'en-US' || v.lang === 'en-GB')
-      );
-      // Sort: Google voices first, then Microsoft, then others
-      englishVoices.sort((a, b) => {
+      const langPrefix = language?.split('-')[0] || 'en';
+      let filteredVoices = voices.filter(v => v.lang.startsWith(langPrefix));
+
+      // Sort: Preferred voice first (EmmaMultilingual for English), then Microsoft, then Google, then others
+      const preferredVoice = DEFAULT_VOICE_PREFERENCES[langPrefix] || 'Microsoft';
+      filteredVoices.sort((a, b) => {
+        // Preferred voice (EmmaMultilingual for English) first
+        if (a.name.includes(preferredVoice) && !b.name.includes(preferredVoice)) return -1;
+        if (!a.name.includes(preferredVoice) && b.name.includes(preferredVoice)) return 1;
+        // Then Microsoft voices
+        if (a.name.includes('Microsoft') && !b.name.includes('Microsoft')) return -1;
+        if (!a.name.includes('Microsoft') && b.name.includes('Microsoft')) return 1;
+        // Then Google voices
         if (a.name.includes('Google') && !b.name.includes('Google')) return -1;
         if (!a.name.includes('Google') && b.name.includes('Google')) return 1;
-        if (a.name.includes('Microsoft') && !b.name.includes('Microsoft')) return -1;
         return 0;
       });
-      setAvailableVoices(englishVoices.length > 0 ? englishVoices : voices.filter(v => v.lang.startsWith('en')));
+
+      setAvailableVoices(filteredVoices.length > 0 ? filteredVoices : voices.slice(0, 10));
+      setSelectedVoiceIndex(0); // First voice is the preferred one after sorting
     };
 
     loadVoices();
@@ -52,7 +66,7 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
     return () => {
       speechSynthesis.onvoiceschanged = null;
     };
-  }, []);
+  }, [language]);
 
   // Web Speech API TTS - Fast and customizable
   const playTTS = (text) => {
@@ -63,7 +77,7 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
 
     setIsTTSPlaying(true);
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
+    utterance.lang = language || 'en-US';
     utterance.rate = 0.85;
     utterance.pitch = 1;
 
