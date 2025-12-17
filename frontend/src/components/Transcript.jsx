@@ -20,9 +20,66 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
   // Only show phonemes for English
   const showPhonemes = language?.startsWith('en');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(0);
   const audioRef = useRef(null);
   const audioContextRef = useRef(null);
   const audioBufferRef = useRef(null);
+
+  // Load available English voices
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = speechSynthesis.getVoices();
+      // Filter for English voices only
+      const englishVoices = voices.filter(v =>
+        v.lang.startsWith('en') &&
+        (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('English') || v.lang === 'en-US' || v.lang === 'en-GB')
+      );
+      // Sort: Google voices first, then Microsoft, then others
+      englishVoices.sort((a, b) => {
+        if (a.name.includes('Google') && !b.name.includes('Google')) return -1;
+        if (!a.name.includes('Google') && b.name.includes('Google')) return 1;
+        if (a.name.includes('Microsoft') && !b.name.includes('Microsoft')) return -1;
+        return 0;
+      });
+      setAvailableVoices(englishVoices.length > 0 ? englishVoices : voices.filter(v => v.lang.startsWith('en')));
+    };
+
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
+
+  // Web Speech API TTS - Fast and customizable
+  const playTTS = (text) => {
+    if (isTTSPlaying || !('speechSynthesis' in window)) return;
+
+    // Cancel any ongoing speech
+    speechSynthesis.cancel();
+
+    setIsTTSPlaying(true);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.85;
+    utterance.pitch = 1;
+
+    // Use selected voice if available
+    if (availableVoices.length > 0 && availableVoices[selectedVoiceIndex]) {
+      utterance.voice = availableVoices[selectedVoiceIndex];
+    }
+
+    utterance.onend = () => setIsTTSPlaying(false);
+    utterance.onerror = () => setIsTTSPlaying(false);
+    speechSynthesis.speak(utterance);
+  };
+
+  const handleVoiceChange = (e) => {
+    setSelectedVoiceIndex(Number(e.target.value));
+  };
 
   // Load audio buffer when audioData changes
   useEffect(() => {
@@ -32,6 +89,10 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
     return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close();
+      }
+      // Cancel any ongoing speech synthesis
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
       }
     };
   }, [audioData]);
@@ -181,24 +242,64 @@ function Transcript({ transcript, wordList, audioData, language = 'en-US' }) {
               </button>
             </div>
 
-            {/* Play Button */}
-            {audioData && (
+            {/* Voice Selector */}
+            {availableVoices.length > 1 && (
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xs text-gray-500 whitespace-nowrap">Voice:</span>
+                <select
+                  value={selectedVoiceIndex}
+                  onChange={handleVoiceChange}
+                  className="flex-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all cursor-pointer border-none outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {availableVoices.map((voice, index) => (
+                    <option key={index} value={index}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Play Buttons */}
+            <div className="flex gap-2 mb-4">
+              {/* TTS - Correct Pronunciation */}
               <button
-                onClick={() => playWordAudio(selectedWord)}
-                disabled={isPlaying}
-                className="w-full mb-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={() => playTTS(getWord(selectedWord))}
+                disabled={isTTSPlaying}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                title="Hear correct pronunciation"
               >
-                {isPlaying ? (
+                {isTTSPlaying ? (
                   <>
-                    <span className="animate-pulse">🔊</span> Playing...
+                    <span className="animate-pulse">🎯</span> Playing...
                   </>
                 ) : (
                   <>
-                    <span>🔊</span> Hear "{getWord(selectedWord)}"
+                    <span>🎯</span> Correct
                   </>
                 )}
               </button>
-            )}
+
+              {/* User Recording */}
+              {audioData && (
+                <button
+                  onClick={() => playWordAudio(selectedWord)}
+                  disabled={isPlaying}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  title="Hear your pronunciation"
+                >
+                  {isPlaying ? (
+                    <>
+                      <span className="animate-pulse">🔊</span> Playing...
+                    </>
+                  ) : (
+                    <>
+                      <span>🔊</span> Your voice
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {/* Syllables - only show if syllables have text */}
             {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).length > 0 && (
