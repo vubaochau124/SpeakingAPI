@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import QuestionSelector from './QuestionSelector';
+import useRealtimeTranscription from '../hooks/useRealtimeTranscription';
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en-US', label: '🇺🇸 English' },
@@ -13,7 +14,8 @@ function AudioInput({
   loading,
   buttonText = 'Get Feedback',
   questions = [],
-  topics = []
+  topics = [],
+  enableRealtimeTranscription = true, // Enable live transcription by default
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState(null);
@@ -24,6 +26,27 @@ function AudioInput({
   const [audioUrl, setAudioUrl] = useState(null);
   const [language, setLanguage] = useState('en-US');
   const [audioLevel, setAudioLevel] = useState(0);
+  const [useRealtime, setUseRealtime] = useState(enableRealtimeTranscription);
+  const [liveTranscript, setLiveTranscript] = useState('');
+
+  // Realtime transcription hook
+  const {
+    isConnected: rtConnected,
+    isRecording: rtRecording,
+    isSpeaking,
+    error: rtError,
+    startRecording: startRealtimeRecording,
+    stopRecording: stopRealtimeRecording,
+    reset: resetRealtime,
+  } = useRealtimeTranscription({
+    language,
+    onTranscript: (text, fullTranscript) => {
+      setLiveTranscript(fullTranscript || text);
+    },
+    onFinalTranscript: (finalTranscript) => {
+      setLiveTranscript(finalTranscript);
+    },
+  });
 
   // Refs
   const mediaRecorderRef = useRef(null);
@@ -64,10 +87,11 @@ function AudioInput({
     animationFrameRef.current = requestAnimationFrame(analyzeAudioLevel);
   };
 
-  // Simple recording - no WebSocket
+  // Start recording with optional realtime transcription
   const startRecording = async () => {
     try {
       setRecordStatus('Starting...');
+      setLiveTranscript('');
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -111,7 +135,17 @@ function AudioInput({
 
       mediaRecorderRef.current.start(500);
       setIsRecording(true);
-      setRecordStatus('🔴 Recording...');
+      setRecordStatus(useRealtime ? '🔴 Recording with live transcription...' : '🔴 Recording...');
+
+      // Start realtime transcription if enabled
+      if (useRealtime) {
+        try {
+          await startRealtimeRecording();
+        } catch (err) {
+          console.warn('Realtime transcription failed to start:', err);
+          // Continue recording even if realtime fails
+        }
+      }
 
       analyzeAudioLevel();
 
@@ -122,9 +156,18 @@ function AudioInput({
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    // Stop realtime transcription first
+    if (useRealtime && rtRecording) {
+      try {
+        await stopRealtimeRecording();
+      } catch (err) {
+        console.warn('Error stopping realtime transcription:', err);
+      }
     }
 
     if (mediaRecorderRef.current && isRecording) {
@@ -159,7 +202,8 @@ function AudioInput({
       return;
     }
 
-    onEvaluate(audioFile, question, language);
+    // Pass live transcript if available (skips Whisper transcription in backend)
+    onEvaluate(audioFile, question, language, useRealtime ? liveTranscript : '');
   };
 
   const hasAudio = recordedBlob || uploadedFile;
@@ -193,6 +237,29 @@ function AudioInput({
         disabled={loading || isRecording}
       />
 
+      {/* Realtime Transcription Toggle */}
+      {enableRealtimeTranscription && (
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3 border border-gray-200">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm text-gray-700">Live transcription</span>
+            <span className="text-xs text-gray-500">(see text as you speak)</span>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useRealtime}
+              onChange={(e) => setUseRealtime(e.target.checked)}
+              disabled={isRecording}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+          </label>
+        </div>
+      )}
+
       {/* Audio Input Options */}
       <div className="grid md:grid-cols-2 gap-4">
         {/* Record Audio */}
@@ -201,15 +268,21 @@ function AudioInput({
         }`}>
           <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center transition-all ${
             isRecording
-              ? 'bg-red-500 animate-pulse'
+              ? useRealtime && isSpeaking
+                ? 'bg-green-500 animate-pulse'
+                : 'bg-red-500 animate-pulse'
               : 'bg-blue-600'
           }`}>
-            <svg className="w-8 h-8 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-3">
-            {isRecording ? 'Recording...' : 'Record Audio'}
+            {isRecording
+              ? useRealtime && isSpeaking
+                ? 'Speaking...'
+                : 'Listening...'
+              : 'Record Audio'}
           </h3>
 
           {/* Audio Level Indicator */}
@@ -224,6 +297,16 @@ function AudioInput({
             </div>
           )}
 
+          {/* Speaking/Connection status */}
+          {isRecording && useRealtime && (
+            <div className="mb-3 flex items-center justify-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${rtConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
+              <span className="text-xs text-gray-500">
+                {rtConnected ? (isSpeaking ? 'Voice detected' : 'Waiting for speech') : 'Connecting...'}
+              </span>
+            </div>
+          )}
+
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={loading}
@@ -231,7 +314,7 @@ function AudioInput({
               isRecording
                 ? 'bg-red-500 hover:bg-red-600'
                 : 'bg-blue-600 hover:bg-blue-700'
-            } text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
+            } text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
           >
             {isRecording ? '⏹ Stop Recording' : '🎙 Start Recording'}
           </button>
@@ -242,6 +325,9 @@ function AudioInput({
             }`}>
               {recordStatus}
             </p>
+          )}
+          {rtError && useRealtime && (
+            <p className="mt-2 text-xs text-orange-600">{rtError}</p>
           )}
         </div>
 
@@ -270,6 +356,44 @@ function AudioInput({
           )}
         </div>
       </div>
+
+      {/* Live Transcript */}
+      {useRealtime && (isRecording || liveTranscript) && (
+        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Live Transcript
+            </h4>
+            {isRecording && (
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                Recording
+              </span>
+            )}
+          </div>
+          <div className="min-h-[60px] max-h-[150px] overflow-y-auto text-gray-800 leading-relaxed">
+            {liveTranscript || (
+              <span className="text-gray-400 italic">
+                {isRecording ? 'Start speaking... transcript appears after pauses' : 'No transcript yet'}
+              </span>
+            )}
+          </div>
+          {liveTranscript && !isRecording && (
+            <button
+              onClick={() => {
+                setLiveTranscript('');
+                resetRealtime();
+              }}
+              className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              Clear transcript
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Audio Preview */}
       {audioUrl && !isRecording && (

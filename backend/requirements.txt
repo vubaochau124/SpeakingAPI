@@ -9,6 +9,7 @@ python-dotenv
 # AI APIs
 openai
 azure-cognitiveservices-speech
+httpx
 
 # Audio processing
 pydub

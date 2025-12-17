@@ -85,7 +85,7 @@ function MainApp({ embedded = false }) {
     }
   };
 
-  const handleUnscriptedEvaluate = async (audioFile, question = '', language = 'en-US') => {
+  const handleUnscriptedEvaluate = async (audioFile, question = '', language = 'en-US', transcript = '') => {
     // Start timing from button click
     const startTime = performance.now();
     const logTime = (label) => {
@@ -109,6 +109,10 @@ function MainApp({ embedded = false }) {
     formData.append('language', language);
     if (question.trim()) {
       formData.append('question', question.trim());
+    }
+    if (transcript && transcript.trim()) {
+      formData.append('transcript', transcript.trim());
+      logTime('📝 Using pre-transcribed text from realtime API');
     }
 
     try {

@@ -18,6 +18,7 @@ from utils.audio import allowed_file, convert_to_wav, get_mime_type, _get_safe_t
 from utils.scoring import calculate_azure_score
 from azure_api import AzureSpeechAPI
 from openai_evaluator import OpenAIEvaluator
+from realtime_whisper import AsyncRealtimeWhisperTranscriber, TranscriptionResult
 
 # Thread pool for background tasks (increased for better concurrency)
 _background_executor = ThreadPoolExecutor(max_workers=8)
@@ -77,6 +78,59 @@ async def save_upload_file_safe(upload_file: UploadFile) -> tuple:
 async def health():
     """Health check endpoint"""
     return {"status": "ok"}
+
+
+@router.get("/session")
+async def get_realtime_session():
+    """
+    Get an ephemeral session token for OpenAI Realtime API.
+
+    This token is short-lived and can be safely exposed to the frontend.
+    The frontend uses it to establish a WebRTC connection directly with OpenAI.
+    """
+    import httpx
+
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.openai.com/v1/realtime/sessions",
+                headers={
+                    "Authorization": f"Bearer {openai_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o-mini-realtime-preview",
+                    "voice": "verse",
+                    "modalities": ["audio", "text"],
+                    "turn_detection": {
+                        "type": "server_vad"
+                    },
+                    "input_audio_transcription": {
+                        "model": "whisper-1"
+                    }
+                },
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                print(f"[SESSION] OpenAI error: {response.status_code} - {response.text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"OpenAI API error: {response.text}"
+                )
+
+            session_data = response.json()
+            print(f"[SESSION] Created ephemeral session: {session_data.get('id', 'unknown')}")
+            return session_data
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="OpenAI API timeout")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"OpenAI API connection error: {str(e)}")
 
 
 @router.get("/results/{part_type}")
@@ -480,6 +534,7 @@ async def evaluate_stream(
     question: Optional[str] = Form(None),
     question_id: Optional[int] = Form(None),
     language: Optional[str] = Form("en-US"),
+    transcript: Optional[str] = Form(None),  # Pre-transcribed text from realtime transcription
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -487,12 +542,14 @@ async def evaluate_stream(
 
     Flow:
     1. Stream: audio_received
-    2. Stream: transcription_complete (with transcript)
+    2. Stream: transcription_complete (with transcript) - SKIPPED if transcript provided
     3. Stream: azure_complete (pronunciation/fluency scores) - parallel with OpenAI
     4. Stream: criterion updates (coherence, lexical, grammar, topic) - as each completes
     5. Stream: complete (final combined result)
     6. Stream: improved_answer (background, after main response)
     7. Background: Save to database (non-blocking)
+
+    If `transcript` is provided (from realtime transcription), Whisper call is skipped.
     """
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No file selected")
@@ -505,14 +562,18 @@ async def evaluate_stream(
     filepath, _ = await save_upload_file_safe(audio)
     filename = os.path.basename(filepath)
 
+    # Capture the transcript parameter for use in the nested generator
+    provided_transcript = transcript
+
     async def generate_sse_async():
+        nonlocal provided_transcript
         start_time = time_module.time()
         wav_path = None
         needs_cleanup = False
         azure_result = None
         openai_result = {}
         combined_result = None
-        transcript = ""
+        final_transcript = ""
         audio_base64 = ""
 
         try:
@@ -527,12 +588,22 @@ async def evaluate_stream(
             # Step 2: Prepare audio and transcribe (with timestamps for smart chunking)
             client = get_azure_client()
             wav_path, needs_cleanup = await asyncio.to_thread(client.prepare_audio, filepath)
-            whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
-            transcript = whisper_result.get('text', '')
 
-            yield f"data: {json.dumps({'type': 'transcription_complete', 'transcript': transcript, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
+            # Use pre-transcribed text if provided (from realtime transcription), otherwise use Whisper
+            whisper_result = {}
+            if provided_transcript:
+                # Skip Whisper - use provided transcript from realtime transcription
+                final_transcript = provided_transcript
+                print(f"[Stream] Using pre-transcribed text ({len(final_transcript)} chars), skipping Whisper")
+                whisper_result = {'text': final_transcript}
+                yield f"data: {json.dumps({'type': 'transcription_complete', 'transcript': final_transcript, 'source': 'realtime', 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
+            else:
+                # No transcript provided - use Whisper
+                whisper_result = await asyncio.to_thread(client.transcribe_only, wav_path, language, True)
+                final_transcript = whisper_result.get('text', '')
+                yield f"data: {json.dumps({'type': 'transcription_complete', 'transcript': final_transcript, 'source': 'whisper', 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
 
-            if not transcript:
+            if not final_transcript:
                 yield f"data: {json.dumps({'type': 'error', 'message': 'No speech detected'})}\n\n"
                 return
 
@@ -543,13 +614,13 @@ async def evaluate_stream(
 
             # Create all tasks upfront (don't pass client - each thread creates its own)
             azure_task = asyncio.create_task(
-                asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result)
+                asyncio.to_thread(_run_azure_assessment, wav_path, final_transcript, language, whisper_result)
             )
 
             criteria = ['coherence', 'lexical_resource', 'grammar', 'understanding']
             criterion_tasks = {
                 asyncio.create_task(
-                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question, language)
+                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, final_transcript, question, language)
                 ): criterion
                 for criterion in criteria
             }
@@ -597,7 +668,7 @@ async def evaluate_stream(
 
             # Step 5: Generate improved answer in background (non-blocking for main response)
             try:
-                improved = await asyncio.to_thread(openai_client._generate_improved_answer, transcript, question, openai_result, language)
+                improved = await asyncio.to_thread(openai_client._generate_improved_answer, final_transcript, question, openai_result, language)
                 if improved:
                     openai_result['improved_answer'] = improved
                     yield f"data: {json.dumps({'type': 'improved_answer', 'result': improved, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
@@ -605,8 +676,8 @@ async def evaluate_stream(
                 print(f"[Stream] Improved answer error: {e}", flush=True)
 
             # Step 6: Save to database in background thread (non-blocking)
-            # Use Whisper transcript (has filler words, proper punctuation/casing) instead of Azure's
-            db_transcript = transcript
+            # Use transcript (from realtime or Whisper) instead of Azure's
+            db_transcript = final_transcript
             scores_data = {
                 'unscripted_result': calculate_azure_score(azure_result) if azure_result else {},
                 'openai_result': openai_result,
@@ -1063,3 +1134,162 @@ async def websocket_realtime_evaluate(websocket: WebSocket):
             pass
         if session and session.session_id in _streaming_sessions:
             del _streaming_sessions[session.session_id]
+
+
+# =============================================================================
+# REALTIME TRANSCRIPTION WITH RMS BUFFERING (WebSocket)
+# =============================================================================
+
+# Store for active transcription sessions
+_transcription_sessions: Dict[str, AsyncRealtimeWhisperTranscriber] = {}
+
+
+@router.websocket("/ws/transcribe-realtime")
+async def websocket_realtime_transcribe(websocket: WebSocket):
+    """
+    WebSocket endpoint for realtime audio transcription with RMS buffering.
+
+    This implements the RMS-buffer-prompt algorithm:
+    - RMS decides WHEN to transcribe (silence detection)
+    - Audio buffer decides WHAT to transcribe (rolling window)
+    - Prompt decides HOW WELL Whisper transcribes (context)
+
+    Protocol:
+    1. Client connects and sends: {"type": "init", "language": "en"}
+    2. Client streams audio: {"type": "audio", "data": "<base64 PCM>"}
+    3. Server sends transcripts: {"type": "transcript", "text": "...", "is_final": false}
+    4. Server sends speaking state: {"type": "speaking", "is_speaking": true}
+    5. Client sends: {"type": "finish"}
+    6. Server responds: {"type": "final", "transcript": "...", "stats": {...}}
+
+    Audio format: 16-bit PCM mono at 16kHz
+    """
+    await websocket.accept()
+    session_id = f"transcribe_{time_module.time()}_{id(websocket)}"
+    transcriber: Optional[AsyncRealtimeWhisperTranscriber] = None
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get('type')
+
+            if msg_type == 'init':
+                # Initialize transcription session
+                language = data.get('language', 'en')
+                # Map language codes (en-US -> en, zh-CN -> zh, etc.)
+                lang_code = language.split('-')[0] if '-' in language else language
+
+                rms_threshold = data.get('rms_threshold', 0.01)
+                silence_ms = data.get('silence_ms', 500)
+
+                transcriber = AsyncRealtimeWhisperTranscriber(
+                    language=lang_code,
+                    rms_threshold=rms_threshold,
+                    silence_ms=silence_ms
+                )
+                _transcription_sessions[session_id] = transcriber
+
+                await websocket.send_json({
+                    'type': 'init_ok',
+                    'session_id': session_id,
+                    'config': {
+                        'language': lang_code,
+                        'rms_threshold': rms_threshold,
+                        'silence_ms': silence_ms,
+                        'sample_rate': 16000,
+                        'sample_width': 2
+                    }
+                })
+                print(f"[RT-TRANSCRIBE] Session initialized: {session_id}, lang={lang_code}")
+
+            elif msg_type == 'audio':
+                if not transcriber:
+                    await websocket.send_json({
+                        'type': 'error',
+                        'message': 'Session not initialized. Send init first.'
+                    })
+                    continue
+
+                # Decode audio chunk
+                audio_b64 = data.get('data', '')
+                try:
+                    audio_bytes = base64.b64decode(audio_b64)
+                except Exception:
+                    await websocket.send_json({
+                        'type': 'error',
+                        'message': 'Invalid base64 audio data'
+                    })
+                    continue
+
+                # Process audio frame
+                result = await transcriber.process_frame(audio_bytes, sample_width=2)
+
+                # Send transcript if available
+                if result and result.text:
+                    await websocket.send_json({
+                        'type': 'transcript',
+                        'text': result.text,
+                        'is_final': not result.is_partial,
+                        'timestamp': result.end_time,
+                        'full_transcript': transcriber.get_full_transcript()
+                    })
+
+                # Send stats periodically (every ~1 second of audio)
+                stats = transcriber.get_stats()
+                if int(stats['audio_processed_sec']) % 1 == 0:
+                    await websocket.send_json({
+                        'type': 'stats',
+                        'is_speaking': stats['is_speaking'],
+                        'buffer_sec': stats['buffer_size_sec']
+                    })
+
+            elif msg_type == 'finish':
+                if not transcriber:
+                    await websocket.send_json({
+                        'type': 'error',
+                        'message': 'No active session'
+                    })
+                    continue
+
+                print(f"[RT-TRANSCRIBE] Finishing session {session_id}")
+
+                # Get final transcription
+                final_result = await transcriber.finish()
+                full_transcript = transcriber.get_full_transcript()
+                stats = transcriber.get_stats()
+
+                await websocket.send_json({
+                    'type': 'final',
+                    'transcript': full_transcript,
+                    'last_segment': final_result.text if final_result else None,
+                    'stats': stats
+                })
+
+                # Cleanup
+                if session_id in _transcription_sessions:
+                    del _transcription_sessions[session_id]
+
+                print(f"[RT-TRANSCRIBE] Session complete: {stats}")
+                break
+
+            elif msg_type == 'cancel':
+                if session_id in _transcription_sessions:
+                    del _transcription_sessions[session_id]
+                await websocket.send_json({'type': 'cancelled'})
+                break
+
+            elif msg_type == 'ping':
+                await websocket.send_json({'type': 'pong'})
+
+    except WebSocketDisconnect:
+        print(f"[RT-TRANSCRIBE] Client disconnected: {session_id}")
+        if session_id in _transcription_sessions:
+            del _transcription_sessions[session_id]
+    except Exception as e:
+        print(f"[RT-TRANSCRIBE] Error: {e}")
+        try:
+            await websocket.send_json({'type': 'error', 'message': str(e)})
+        except Exception:
+            pass
+        if session_id in _transcription_sessions:
+            del _transcription_sessions[session_id]
