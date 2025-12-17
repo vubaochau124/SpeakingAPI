@@ -86,3 +86,11 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+# local scripts
+realtime_test.py
+
+# audio test files
+speech/*.mp3
+
+# windows artifacts
+nul
