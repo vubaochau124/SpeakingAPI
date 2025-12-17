@@ -1,4 +1,4 @@
-# SpeechAce - English Speech Evaluation
+# English Speech Evaluation
 
 AI-powered English speech evaluation using Azure Speech API and OpenAI.
 

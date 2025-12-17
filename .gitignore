@@ -55,6 +55,8 @@ results/
 !tsconfig.json
 !database/
 audio_submissions/
+tests/
+samples/
 
 # IDE
 .vscode/

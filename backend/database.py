@@ -11,8 +11,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localho
 # Configure connection pooling for better concurrency
 engine = create_engine(
     DATABASE_URL,
-    pool_size=10,  # Number of persistent connections
-    max_overflow=20,  # Additional connections allowed beyond pool_size
+    pool_size=25,  # Number of persistent connections (tăng từ 10 → 25)
+    max_overflow=75,  # Additional connections allowed beyond pool_size (tăng từ 20 → 75)
     pool_timeout=30,  # Seconds to wait for a connection from pool
     pool_recycle=1800,  # Recycle connections after 30 minutes
     pool_pre_ping=True,  # Test connections before using them
@@ -103,6 +103,19 @@ def run_migrations():
                 ALTER TABLE assignments ADD COLUMN deadline TIMESTAMP WITH TIME ZONE;
             END IF;
         END $$;
+        """,
+        # Remove unique constraint from user_results to allow history tracking
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='uq_user_part_type') THEN
+                ALTER TABLE user_results DROP CONSTRAINT uq_user_part_type;
+            END IF;
+        END $$;
+        """,
+        # Add index for efficient progress queries
+        """
+        CREATE INDEX IF NOT EXISTS ix_user_results_user_created ON user_results(user_id, created_at);
         """
     ]
 

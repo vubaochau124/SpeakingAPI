@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -77,8 +77,9 @@ class UserResult(Base):
 
     user = relationship("User", back_populates="results")
 
+    # Index for efficient progress queries (removed UniqueConstraint to allow history)
     __table_args__ = (
-        UniqueConstraint('user_id', 'part_type', name='uq_user_part_type'),
+        Index('ix_user_results_user_created', 'user_id', 'created_at'),
     )
 
 

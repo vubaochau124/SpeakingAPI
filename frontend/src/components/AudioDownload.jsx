@@ -1,8 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function AudioDownload({ audioData }) {
   const [converting, setConverting] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  const menuRef = useRef(null);
+  const buttonRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showOptions) return;
+
+    const handleClickOutside = (event) => {
+      if (
+        menuRef.current && !menuRef.current.contains(event.target) &&
+        buttonRef.current && !buttonRef.current.contains(event.target)
+      ) {
+        setShowOptions(false);
+      }
+    };
+
+    // Add listener with slight delay to avoid immediate close
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOptions]);
 
   // Get original format from data URL
   const getOriginalFormat = () => {
@@ -183,6 +209,7 @@ function AudioDownload({ audioData }) {
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         onClick={() => setShowOptions(!showOptions)}
         disabled={converting}
         className="flex items-center gap-2 px-4 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 hover:text-white rounded-lg transition-all duration-200 disabled:opacity-50"
@@ -206,17 +233,11 @@ function AudioDownload({ audioData }) {
         )}
       </button>
 
-      {/* Dropdown Options */}
+      {/* Dropdown Options - Popup above the button */}
       {showOptions && (
-        <>
-          {/* Backdrop */}
           <div
-            className="fixed inset-0 z-10"
-            onClick={() => setShowOptions(false)}
-          />
-
-          {/* Menu */}
-          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-xl z-20 overflow-hidden">
+            ref={menuRef}
+            className="absolute right-0 bottom-full mb-2 w-56 bg-slate-800 border border-slate-600 rounded-xl shadow-xl z-20 overflow-hidden">
             <div className="p-2 border-b border-slate-700">
               <p className="text-xs text-slate-400 px-2">Original: {originalFormat}</p>
             </div>
@@ -261,7 +282,6 @@ function AudioDownload({ audioData }) {
               </button>
             </div>
           </div>
-        </>
       )}
     </div>
   );

@@ -2,6 +2,8 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
@@ -13,6 +15,10 @@ print(f"[STARTUP] AZURE_SPEECH_KEY present: {bool(os.getenv('AZURE_SPEECH_KEY'))
 print(f"[STARTUP] AZURE_SPEECH_REGION: {os.getenv('AZURE_SPEECH_REGION', 'not set')}")
 print(f"[STARTUP] OPENAI_API_KEY present: {bool(os.getenv('OPENAI_API_KEY'))}")
 print(f"[STARTUP] DATABASE_URL present: {bool(os.getenv('DATABASE_URL'))}")
+
+# Clear prompt caches on startup to ensure fresh prompts
+from openai_evaluator import clear_prompt_caches
+clear_prompt_caches()
 
 # Initialize database
 from database import init_db, engine
@@ -48,10 +54,39 @@ except Exception as e:
 # Create FastAPI app
 app = FastAPI(title="Speech Evaluation API")
 
+# Middleware to allow Private Network Access preflight (for dev behind HTTPS frontend)
+class AllowPrivateNetworkMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Handle PNA preflight request from browsers
+        if request.method == "OPTIONS" and request.headers.get("access-control-request-private-network") == "true":
+            headers = {
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+                "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Private-Network": "true",
+            }
+            return Response(status_code=204, headers=headers)
+        response = await call_next(request)
+        # Ensure subsequent responses expose the PNA header as well (helpful for dev)
+        response.headers.setdefault("Access-Control-Allow-Private-Network", "true")
+        return response
+
+app.add_middleware(AllowPrivateNetworkMiddleware)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:6969",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:6969",
+        "https://verify-certificate.sotatek.works",
+        "https://127.0.0.1:8001"
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -65,6 +100,7 @@ from routes.admin import router as admin_router
 from routes.classes import router as classes_router
 from routes.assignments import router as assignments_router
 from routes.evaluation import router as evaluation_router
+from routes.progress import router as progress_router
 
 app.include_router(auth_router)
 app.include_router(content_router)
@@ -73,6 +109,7 @@ app.include_router(admin_router)
 app.include_router(classes_router)
 app.include_router(assignments_router)
 app.include_router(evaluation_router)
+app.include_router(progress_router)
 
 # Serve frontend static files (for production)
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
@@ -103,12 +140,12 @@ if __name__ == '__main__':
     is_windows = sys.platform == 'win32'
 
     if is_windows:
-        print("Backend server starting on http://localhost:5000 (single worker - Windows)")
+        print("Backend server starting on http://localhost:8001 (single worker - Windows)")
         print("Note: Concurrent requests are handled via asyncio thread pool")
         uvicorn.run(
             "app:app",
             host="0.0.0.0",
-            port=5000,
+            port=8001,
             limit_concurrency=100,
             timeout_keep_alive=30,
         )
@@ -117,11 +154,11 @@ if __name__ == '__main__':
         cpu_count = multiprocessing.cpu_count()
         workers = min((2 * cpu_count) + 1, 4)
 
-        print(f"Backend server starting on http://localhost:5000 with {workers} workers")
+        print(f"Backend server starting on http://localhost:8001 with {workers} workers")
         uvicorn.run(
             "app:app",
             host="0.0.0.0",
-            port=5000,
+            port=8001,
             workers=workers,
             limit_concurrency=100,
             limit_max_requests=1000,

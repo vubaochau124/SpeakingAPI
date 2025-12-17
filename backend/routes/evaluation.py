@@ -192,11 +192,11 @@ def _run_azure_assessment(wav_path, transcript, language='en-US', whisper_result
     client = AzureSpeechAPI()
     return client.assess_pronunciation_chunked(wav_path, transcript, language, whisper_result=whisper_result)
 
-def _run_openai_evaluation(transcript, question):
+def _run_openai_evaluation(transcript, question, language='en-US'):
     """Run OpenAI content evaluation (for parallel execution)"""
     start = time_module.time()
-    print(f"[OPENAI-GPT] Starting content evaluation... (t={start:.2f})", flush=True)
-    result = OpenAIEvaluator().evaluate_chunked_parallel(transcript=transcript, question=question)
+    print(f"[OPENAI-GPT] Starting content evaluation for language={language}... (t={start:.2f})", flush=True)
+    result = OpenAIEvaluator().evaluate_chunked_parallel(transcript=transcript, question=question, language=language)
     elapsed = time_module.time() - start
     print(f"[OPENAI-GPT] Completed ALL content evaluation in {elapsed:.2f}s", flush=True)
     return result
@@ -277,7 +277,7 @@ async def evaluate_audio(
             # Use asyncio.to_thread to run blocking calls without blocking the event loop
             azure_result, openai_eval = await asyncio.gather(
                 asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result),
-                asyncio.to_thread(_run_openai_evaluation, transcript, question)
+                asyncio.to_thread(_run_openai_evaluation, transcript, question, language)
             )
 
         # Cleanup temp WAV
@@ -303,7 +303,7 @@ async def evaluate_audio(
             )
             # Generate improved answer
             try:
-                improved = openai_client._generate_improved_answer(transcript, question, openai_result)
+                improved = openai_client._generate_improved_answer(transcript, question, openai_result, language)
                 openai_result['improved_answer'] = improved
             except Exception:
                 pass
@@ -315,36 +315,24 @@ async def evaluate_audio(
 
         os.remove(filepath)
 
-        # Save to database
-        db_transcript = azure_result.get('speech_score', {}).get('transcript', '') if azure_result else transcript
+        # Save to database - use Whisper transcript (has filler words, proper punctuation/casing)
+        db_transcript = transcript
         scores_data = {
             'unscripted_result': azure_score,
             'openai_result': openai_result,
             'combined_result': combined_result
         }
 
-        existing_result = db.query(UserResult).filter(
-            UserResult.user_id == current_user.id,
-            UserResult.part_type == 'unscripted'
-        ).first()
-
-        if existing_result:
-            existing_result.question_id = question_id
-            existing_result.transcript = db_transcript
-            existing_result.azure_result = azure_result
-            existing_result.openai_result = openai_result
-            existing_result.scores = scores_data
-            existing_result.updated_at = datetime.now()
-        else:
-            db.add(UserResult(
-                user_id=current_user.id,
-                part_type='unscripted',
-                question_id=question_id,
-                transcript=db_transcript,
-                azure_result=azure_result,
-                openai_result=openai_result,
-                scores=scores_data
-            ))
+        # Always INSERT new record to preserve history for progress tracking
+        db.add(UserResult(
+            user_id=current_user.id,
+            part_type='unscripted',
+            question_id=question_id,
+            transcript=db_transcript,
+            azure_result=azure_result,
+            openai_result=openai_result,
+            scores=scores_data
+        ))
         db.commit()
 
         # Log assessment to file
@@ -442,11 +430,14 @@ async def evaluate_openai_only(
     question: Optional[str] = Form(None),
     pronunciation_band: float = Form(5.0),
     fluency_band: float = Form(5.0),
+    language: Optional[str] = Form("en-US"),
     current_user: User = Depends(get_current_user)
 ):
     """OpenAI evaluation endpoint (parallel processing)"""
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript is required")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
     try:
         openai_client = get_openai_client()
@@ -454,7 +445,8 @@ async def evaluate_openai_only(
             transcript=transcript,
             question=question,
             azure_pronunciation_band=pronunciation_band,
-            azure_fluency_band=fluency_band
+            azure_fluency_band=fluency_band,
+            language=language
         )
         return {
             'status': 'openai_complete',
@@ -471,11 +463,14 @@ async def evaluate_openai_streaming(
     question: Optional[str] = Form(None),
     pronunciation_band: float = Form(5.0),
     fluency_band: float = Form(5.0),
+    language: Optional[str] = Form("en-US"),
     current_user: User = Depends(get_current_user)
 ):
     """Streaming OpenAI evaluation - returns results progressively via SSE"""
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript is required")
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language. Supported: {SUPPORTED_LANGUAGES}")
 
     def generate_sse():
         try:
@@ -484,13 +479,14 @@ async def evaluate_openai_streaming(
                 transcript=transcript,
                 question=question,
                 azure_pronunciation_band=pronunciation_band,
-                azure_fluency_band=fluency_band
+                azure_fluency_band=fluency_band,
+                language=language
             ):
                 yield f"data: {json.dumps(chunk)}\n\n"
                 if chunk.get('type') == 'complete':
                     try:
                         improved = openai_client.generate_improved_answer_async(
-                            transcript, question, chunk.get('openai_result', {})
+                            transcript, question, chunk.get('openai_result', {}), language
                         )
                         yield f"data: {json.dumps({'type': 'improved_answer', 'result': improved})}\n\n"
                     except Exception:
@@ -512,28 +508,16 @@ def _save_result_to_db(user_id, username, question_id, question, transcript, azu
         from database import SessionLocal
         db = SessionLocal()
         try:
-            existing_result = db.query(UserResult).filter(
-                UserResult.user_id == user_id,
-                UserResult.part_type == 'unscripted'
-            ).first()
-
-            if existing_result:
-                existing_result.question_id = question_id
-                existing_result.transcript = transcript
-                existing_result.azure_result = azure_result
-                existing_result.openai_result = openai_result
-                existing_result.scores = scores_data
-                existing_result.updated_at = datetime.now()
-            else:
-                db.add(UserResult(
-                    user_id=user_id,
-                    part_type='unscripted',
-                    question_id=question_id,
-                    transcript=transcript,
-                    azure_result=azure_result,
-                    openai_result=openai_result,
-                    scores=scores_data
-                ))
+            # Always INSERT new record to preserve history for progress tracking
+            db.add(UserResult(
+                user_id=user_id,
+                part_type='unscripted',
+                question_id=question_id,
+                transcript=transcript,
+                azure_result=azure_result,
+                openai_result=openai_result,
+                scores=scores_data
+            ))
             db.commit()
             print(f"[DB] Result saved for user {user_id}", flush=True)
 
@@ -664,10 +648,10 @@ async def evaluate_stream(
                 asyncio.to_thread(_run_azure_assessment, wav_path, transcript, language, whisper_result)
             )
 
-            criteria = ['coherence', 'lexical_resource', 'grammar', 'topic_relevance']
+            criteria = ['coherence', 'lexical_resource', 'grammar', 'understanding']
             criterion_tasks = {
                 asyncio.create_task(
-                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question)
+                    asyncio.to_thread(openai_client._evaluate_single_criterion, criterion, transcript, question, language)
                 ): criterion
                 for criterion in criteria
             }
@@ -715,7 +699,7 @@ async def evaluate_stream(
 
             # Step 5: Generate improved answer in background (non-blocking for main response)
             try:
-                improved = await asyncio.to_thread(openai_client._generate_improved_answer, transcript, question, openai_result)
+                improved = await asyncio.to_thread(openai_client._generate_improved_answer, transcript, question, openai_result, language)
                 if improved:
                     openai_result['improved_answer'] = improved
                     yield f"data: {json.dumps({'type': 'improved_answer', 'result': improved, 'elapsed': round(time_module.time() - start_time, 2)})}\n\n"
@@ -723,7 +707,8 @@ async def evaluate_stream(
                 print(f"[Stream] Improved answer error: {e}", flush=True)
 
             # Step 6: Save to database in background thread (non-blocking)
-            db_transcript = azure_result.get('speech_score', {}).get('transcript', '') if azure_result else transcript
+            # Use Whisper transcript (has filler words, proper punctuation/casing) instead of Azure's
+            db_transcript = transcript
             scores_data = {
                 'unscripted_result': calculate_azure_score(azure_result) if azure_result else {},
                 'openai_result': openai_result,
@@ -856,26 +841,15 @@ async def evaluate_conversation(
             'azure_prosody': azure_scores.get('prosody', 0)
         }
 
-        existing_result = db.query(UserResult).filter(
-            UserResult.user_id == current_user.id,
-            UserResult.part_type == 'conversation'
-        ).first()
-
-        if existing_result:
-            existing_result.conversation_id = conversation_id
-            existing_result.transcript = transcript
-            existing_result.azure_result = results
-            existing_result.scores = scores_data
-            existing_result.updated_at = datetime.now()
-        else:
-            db.add(UserResult(
-                user_id=current_user.id,
-                part_type='conversation',
-                conversation_id=conversation_id,
-                transcript=transcript,
-                azure_result=results,
-                scores=scores_data
-            ))
+        # Always INSERT new record to preserve history for progress tracking
+        db.add(UserResult(
+            user_id=current_user.id,
+            part_type='conversation',
+            conversation_id=conversation_id,
+            transcript=transcript,
+            azure_result=results,
+            scores=scores_data
+        ))
         db.commit()
 
         # Log assessment to file
@@ -1221,7 +1195,8 @@ async def websocket_realtime_evaluate(websocket: WebSocket):
                         openai_client = get_openai_client()
                         openai_result = openai_client.evaluate_chunked_parallel(
                             transcript=transcript,
-                            question=session.question
+                            question=session.question,
+                            language=session.language
                         )
                         combined_result = openai_client._calculate_combined_result(
                             openai_result,

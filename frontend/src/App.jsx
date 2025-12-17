@@ -13,9 +13,10 @@ import TeacherDashboard from './components/TeacherDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import StudentProgress from './components/progress/StudentProgress';
 import axios from 'axios';
 
-function MainApp() {
+function MainApp({ embedded = false }) {
   const { user, logout, getAuthHeaders } = useAuth();
   const [activeTab, setActiveTab] = useState('conversation');
   const [questions, setQuestions] = useState([]);
@@ -204,7 +205,7 @@ function MainApp() {
                 'coherence': 'Coherence',
                 'lexical_resource': 'Vocabulary',
                 'grammar': 'Grammar',
-                'topic_relevance': 'Relevance'
+                'understanding': 'Understanding'
               };
               setProcessingStep(`Evaluated: ${criterionNames[data.criterion] || data.criterion}`);
               partialOpenaiResult[data.criterion] = data.result;
@@ -284,43 +285,49 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        {/* User Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">{user?.username?.[0]?.toUpperCase() || 'U'}</span>
+    <div className={embedded ? "" : "min-h-screen bg-gray-50"}>
+      <div className={`container mx-auto px-4 max-w-5xl ${embedded ? 'py-4' : 'py-8'}`}>
+        {/* Header - only show when not embedded */}
+        {!embedded && (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-gray-900 font-bold text-lg">{user?.username?.[0]?.toUpperCase() || 'U'}</span>
+                </div>
+                <span className="text-gray-600">Welcome, <span className="text-gray-900 font-medium">{user?.username}</span></span>
+              </div>
+              <button
+                onClick={logout}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
+              </button>
             </div>
-            <span className="text-slate-300">Welcome, <span className="text-white font-medium">{user?.username}</span></span>
-          </div>
-          <button
-            onClick={logout}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Logout
-          </button>
-        </div>
+          </>
+        )}
 
-        {/* Header */}
-        <div className="text-center mb-10">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-sky-400 bg-clip-text text-transparent mb-3">
-            Speech Evaluation
-          </h1>
-          <p className="text-slate-400 text-lg">IELTS Speaking Practice & Assessment</p>
-        </div>
+        {/* Title Header - only show when not embedded */}
+        {!embedded && (
+          <div className="text-center mb-10">
+            <h1 className="text-5xl font-bold text-blue-600 mb-3">
+              Speech Evaluation
+            </h1>
+            <p className="text-gray-500 text-lg">IELTS Speaking Practice & Assessment</p>
+          </div>
+        )}
 
         {/* Tab Navigation */}
-        <div className="flex mb-8 bg-slate-800/50 backdrop-blur-sm rounded-2xl p-2 shadow-xl">
+        <div className="flex mb-8 bg-white shadow-sm rounded-2xl p-2 shadow-xl">
           <button
             onClick={() => setActiveTab('conversation')}
             className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
               activeTab === 'conversation'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                ? 'bg-blue-600 text-gray-900 shadow-lg shadow-blue-500/25'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
             <div className="flex items-center justify-center gap-2">
@@ -329,14 +336,14 @@ function MainApp() {
               </svg>
               Part 1: Conversation
             </div>
-            {conversationResults && <span className="ml-2 text-green-300">✓</span>}
+            {conversationResults && <span className="ml-2 text-green-600">✓</span>}
           </button>
           <button
             onClick={() => setActiveTab('unscripted')}
             className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
               activeTab === 'unscripted'
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/25'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                ? 'bg-blue-600 text-gray-900 shadow-lg shadow-blue-500/25'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
             <div className="flex items-center justify-center gap-2">
@@ -345,7 +352,7 @@ function MainApp() {
               </svg>
               Part 2: Answer Question
             </div>
-            {unscriptedResults && <span className="ml-2 text-green-300">✓</span>}
+            {unscriptedResults && <span className="ml-2 text-green-600">✓</span>}
           </button>
         </div>
 
@@ -353,14 +360,14 @@ function MainApp() {
         {activeTab === 'conversation' && (
           <div className="space-y-6">
             {!conversationResults ? (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-8 shadow-xl border border-gray-200">
                 <ConversationRolePlay
                   conversations={conversations}
                   onFinish={handleConversationFinish}
                   loading={conversationLoading}
                 />
                 {conversationError && (
-                  <div className="mt-4 bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl">
+                  <div className="mt-4 bg-red-500/20 border border-red-500/50 text-red-600 px-4 py-3 rounded-xl">
                     {conversationError}
                   </div>
                 )}
@@ -375,9 +382,9 @@ function MainApp() {
             )}
 
             {conversationLoading && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-cyan-500 border-t-transparent"></div>
-                <p className="mt-4 text-slate-300">Analyzing your conversation...</p>
+              <div className="bg-white shadow-sm rounded-2xl p-8 text-center shadow-xl border border-gray-200">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+                <p className="mt-4 text-gray-600">Analyzing your conversation...</p>
               </div>
             )}
           </div>
@@ -387,14 +394,14 @@ function MainApp() {
         {activeTab === 'unscripted' && (
           <div className="space-y-6">
             {!unscriptedResults ? (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-8 shadow-xl border border-gray-200">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
-                    <span className="text-white font-bold">2</span>
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                    <span className="text-gray-900 font-bold">2</span>
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white">Answer a Question</h2>
-                    <p className="text-slate-400">Speak freely to answer the question</p>
+                    <h2 className="text-2xl font-bold text-gray-900">Answer a Question</h2>
+                    <p className="text-gray-500">Speak freely to answer the question</p>
                   </div>
                 </div>
                 <AudioInput
@@ -405,7 +412,7 @@ function MainApp() {
                   topics={topics}
                 />
                 {unscriptedError && (
-                  <div className="mt-4 bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl">
+                  <div className="mt-4 bg-red-500/20 border border-red-500/50 text-red-600 px-4 py-3 rounded-xl">
                     {unscriptedError}
                   </div>
                 )}
@@ -414,29 +421,29 @@ function MainApp() {
               <div className="space-y-6">
                 {/* Question Display */}
                 {currentQuestion && (
-                  <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-2xl p-6 shadow-lg">
+                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 shadow-lg">
                     <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg">
                         <span className="text-2xl">❓</span>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold text-white mb-2">Question</h3>
-                        <p className="text-slate-200 leading-relaxed">{currentQuestion}</p>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Question</h3>
+                        <p className="text-gray-700 leading-relaxed">{currentQuestion}</p>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Audio */}
-                <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-                  <h3 className="text-xl font-bold text-white mb-4">Your Recording</h3>
+                <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">Your Recording</h3>
                   {unscriptedResults.audio_data && <AudioPlayer audioData={unscriptedResults.audio_data} />}
                 </div>
 
 
                 {/* Relevance */}
                 {hasQuestion && (unscriptedResults.speech_score?.relevance || unscriptedResults.speech_score?.score_issue_list) && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+                  <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                     <Relevance
                       relevance={unscriptedResults.speech_score.relevance}
                       scoreIssueList={unscriptedResults.speech_score.score_issue_list}
@@ -446,18 +453,19 @@ function MainApp() {
 
                 {/* Transcript */}
                 {unscriptedResults.speech_score?.transcript && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+                  <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                       <>
                         {unscriptedResults.speech_score?.word_score_list ? (
                           <Transcript
                             transcript={unscriptedResults.speech_score.transcript}
                             wordList={unscriptedResults.speech_score.word_score_list}
                             audioData={unscriptedResults.audio_data}
+                            language={unscriptedResults.speech_score?.detected_dialect?.lang_id}
                           />
                         ) : (
                           <div>
-                            <h3 className="text-xl font-bold text-white mb-4">Transcript</h3>
-                            <p className="text-slate-300 leading-relaxed">{unscriptedResults.speech_score.transcript}</p>
+                            <h3 className="text-xl font-bold text-gray-900 mb-4">Transcript</h3>
+                            <p className="text-gray-600 leading-relaxed">{unscriptedResults.speech_score.transcript}</p>
                           </div>
                         )}
                       </>
@@ -466,7 +474,7 @@ function MainApp() {
 
                 {/* Score & Detailed Feedback */}
                 {(unscriptedResults.openai_result || unscriptedResults.combined_result || unscriptedResults._loading_openai) && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+                  <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                     <FeedbackDetails
                       openaiResult={unscriptedResults.openai_result}
                       combinedResult={unscriptedResults.combined_result}
@@ -479,7 +487,7 @@ function MainApp() {
 
                 {/* Improved Answer Suggestion */}
                 {unscriptedResults.openai_result?.improved_answer && (
-                  <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+                  <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
                     <ImprovedAnswer
                       improvedAnswerData={unscriptedResults.openai_result.improved_answer}
                       originalTranscript={unscriptedResults.speech_score?.transcript}
@@ -489,7 +497,7 @@ function MainApp() {
 
                 <button
                   onClick={resetUnscripted}
-                  className="w-full py-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/25"
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-gray-900 font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/25"
                 >
                   Try Again
                 </button>
@@ -497,9 +505,9 @@ function MainApp() {
             )}
 
             {unscriptedLoading && (
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 text-center shadow-xl border border-slate-700/50">
+              <div className="bg-white shadow-sm rounded-2xl p-8 text-center shadow-xl border border-gray-200">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-                <p className="mt-4 text-slate-300">{processingStep || 'Analyzing your speech...'}</p>
+                <p className="mt-4 text-gray-600">{processingStep || 'Analyzing your speech...'}</p>
                 <div className="mt-3 flex justify-center gap-2">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -514,17 +522,107 @@ function MainApp() {
   );
 }
 
+function StudentLayout() {
+  const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState('practice'); // 'practice', 'classes', 'progress'
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Fixed Header Navigation */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="container mx-auto max-w-5xl px-4">
+          <div className="flex items-center py-3 gap-4">
+            {/* Logo/Title - fixed width */}
+            <div className="flex-shrink-0">
+              <h1 className="text-xl font-bold text-blue-600 hidden sm:block">Speech Evaluation</h1>
+              <h1 className="text-lg font-bold text-blue-600 sm:hidden">Speech</h1>
+            </div>
+
+            {/* Navigation Tabs - fill remaining space */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-full max-w-md">
+                <button
+                  onClick={() => setActiveTab('practice')}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'practice'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  <span className="hidden sm:inline">Practice</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('classes')}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'classes'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span className="hidden sm:inline">Classes</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('progress')}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'progress'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span className="hidden sm:inline">Progress</span>
+                </button>
+              </div>
+            </div>
+
+            {/* User & Logout - fixed width */}
+            <div className="flex-shrink-0 flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">{user?.username?.[0]?.toUpperCase() || 'S'}</span>
+                </div>
+                <span className="text-gray-700 text-sm">{user?.username}</span>
+              </div>
+              <button
+                onClick={logout}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 rounded-lg transition-colors flex items-center gap-2 text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      {activeTab === 'practice' && <MainApp embedded />}
+      {activeTab === 'classes' && <StudentDashboard embedded />}
+      {activeTab === 'progress' && <StudentProgress />}
+    </div>
+  );
+}
+
 function AppWithAuth() {
   const { isAuthenticated, loading, user } = useAuth();
   const [authView, setAuthView] = useState('login');
-  const [studentView, setStudentView] = useState('dashboard'); // 'dashboard' or 'practice'
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-cyan-500 border-t-transparent"></div>
-          <p className="mt-4 text-slate-300">Loading...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -546,37 +644,8 @@ function AppWithAuth() {
     return <TeacherDashboard />;
   }
 
-  // Student view
-  if (studentView === 'dashboard') {
-    return (
-      <StudentDashboard
-        onStartPractice={(context) => {
-          // Only handle 'practice' type (Practice on My Own)
-          if (context?.type === 'practice') {
-            setStudentView('practice');
-          }
-        }}
-      />
-    );
-  }
-
-  // Practice view with back button (for "Practice on My Own")
-  return (
-    <div>
-      <div className="fixed top-4 left-4 z-50">
-        <button
-          onClick={() => setStudentView('dashboard')}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 backdrop-blur-sm text-slate-300 hover:text-white rounded-lg border border-slate-700 hover:border-cyan-500/50 transition-all"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Dashboard
-        </button>
-      </div>
-      <MainApp />
-    </div>
-  );
+  // Student view with navigation
+  return <StudentLayout />;
 }
 
 function App() {
