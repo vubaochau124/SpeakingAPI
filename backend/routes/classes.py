@@ -38,19 +38,14 @@ async def get_classes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all classes (filtered by role)"""
+    """Get classes the user teaches (for Teaching tab)"""
     if current_user.role == 'admin':
         # Admin sees all classes
         classes = db.query(Class).all()
-    elif current_user.role == 'teacher':
-        # Teacher sees classes they teach
+    else:
+        # Any user sees classes they teach
         teacher_assignments = db.query(ClassTeacher).filter(ClassTeacher.teacher_id == current_user.id).all()
         class_ids = [a.class_id for a in teacher_assignments]
-        classes = db.query(Class).filter(Class.id.in_(class_ids)).all() if class_ids else []
-    else:
-        # Student sees their enrolled classes
-        enrollments = db.query(ClassStudent).filter(ClassStudent.student_id == current_user.id).all()
-        class_ids = [e.class_id for e in enrollments]
         classes = db.query(Class).filter(Class.id.in_(class_ids)).all() if class_ids else []
 
     result = []
@@ -69,6 +64,62 @@ async def get_classes(
     return {"classes": result}
 
 
+@router.get("/my")
+async def get_my_classes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all classes the user is associated with (as teacher or student)"""
+    result = []
+    seen_class_ids = set()
+
+    # Get classes where user is a teacher
+    teacher_assignments = db.query(ClassTeacher).filter(ClassTeacher.teacher_id == current_user.id).all()
+    for assignment in teacher_assignments:
+        c = assignment.class_
+        if c.id not in seen_class_ids:
+            seen_class_ids.add(c.id)
+            student_count = db.query(ClassStudent).filter(ClassStudent.class_id == c.id).count()
+            teachers = get_class_teachers(db, c.id)
+            result.append({
+                "id": c.id,
+                "name": c.name,
+                "description": c.description,
+                "teachers": teachers,
+                "student_count": student_count,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "user_role": "teacher"  # User is a teacher of this class
+            })
+
+    # Get classes where user is enrolled as a student
+    enrollments = db.query(ClassStudent).filter(ClassStudent.student_id == current_user.id).all()
+    for enrollment in enrollments:
+        c = enrollment.class_
+        if c.id not in seen_class_ids:
+            seen_class_ids.add(c.id)
+            student_count = db.query(ClassStudent).filter(ClassStudent.class_id == c.id).count()
+            teachers = get_class_teachers(db, c.id)
+            result.append({
+                "id": c.id,
+                "name": c.name,
+                "description": c.description,
+                "teachers": teachers,
+                "student_count": student_count,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "user_role": "student"  # User is a student in this class
+            })
+
+    return {"classes": result}
+
+
+def is_class_student(db: Session, class_id: int, user_id: int) -> bool:
+    """Check if user is enrolled as a student in the class"""
+    return db.query(ClassStudent).filter(
+        ClassStudent.class_id == class_id,
+        ClassStudent.student_id == user_id
+    ).first() is not None
+
+
 @router.get("/{class_id}")
 async def get_class_detail(
     class_id: int,
@@ -80,17 +131,12 @@ async def get_class_detail(
     if not class_:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # Check access (admin can access all classes)
-    if current_user.role == 'student':
-        enrollment = db.query(ClassStudent).filter(
-            ClassStudent.class_id == class_id,
-            ClassStudent.student_id == current_user.id
-        ).first()
-        if not enrollment:
-            raise HTTPException(status_code=403, detail="Not enrolled in this class")
-    elif current_user.role == 'teacher' and not is_class_teacher(db, class_id, current_user.id):
-        raise HTTPException(status_code=403, detail="Not your class")
-    # Admin role has access to all classes (no restriction needed)
+    # Check access: admin has full access, others need to be teacher or student of the class
+    if current_user.role != 'admin':
+        is_teacher = is_class_teacher(db, class_id, current_user.id)
+        is_student = is_class_student(db, class_id, current_user.id)
+        if not is_teacher and not is_student:
+            raise HTTPException(status_code=403, detail="Not a member of this class")
 
     # Get students
     enrollments = db.query(ClassStudent).filter(ClassStudent.class_id == class_id).all()
@@ -117,19 +163,15 @@ async def get_class_detail(
 @router.post("")
 async def create_class(
     class_data: ClassCreate,
-    user: User = Depends(require_admin_or_teacher),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Create a new class (admin or teacher)"""
-    # Verify all teachers exist
+    """Create a new class (admin only)"""
+    # Verify all teachers exist (any user can be assigned as teacher)
     for teacher_id in class_data.teacher_ids:
-        teacher = db.query(User).filter(User.id == teacher_id, User.role == 'teacher').first()
+        teacher = db.query(User).filter(User.id == teacher_id).first()
         if not teacher:
-            raise HTTPException(status_code=400, detail=f"Teacher with id {teacher_id} not found")
-
-    # Teachers can only create classes with themselves as a teacher
-    if user.role == 'teacher' and user.id not in class_data.teacher_ids:
-        raise HTTPException(status_code=403, detail="Teachers must include themselves when creating a class")
+            raise HTTPException(status_code=400, detail=f"User with id {teacher_id} not found")
 
     new_class = Class(
         name=class_data.name,
@@ -161,8 +203,8 @@ async def update_class(
     if not class_:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # Teachers can only update their own classes
-    if user.role == 'teacher' and not is_class_teacher(db, class_id, user.id):
+    # Non-admin users can only update classes they teach
+    if user.role != 'admin' and not is_class_teacher(db, class_id, user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     if class_data.name is not None:
@@ -170,13 +212,13 @@ async def update_class(
     if class_data.description is not None:
         class_.description = class_data.description
 
-    # Only admin can change teachers
+    # Only admin can change teachers list
     if class_data.teacher_ids is not None and user.role == 'admin':
-        # Verify all teachers exist
+        # Verify all teachers exist (any user can be a teacher)
         for teacher_id in class_data.teacher_ids:
-            teacher = db.query(User).filter(User.id == teacher_id, User.role == 'teacher').first()
+            teacher = db.query(User).filter(User.id == teacher_id).first()
             if not teacher:
-                raise HTTPException(status_code=400, detail=f"Teacher with id {teacher_id} not found")
+                raise HTTPException(status_code=400, detail=f"User with id {teacher_id} not found")
 
         # Remove existing teachers and add new ones
         db.query(ClassTeacher).filter(ClassTeacher.class_id == class_id).delete()
@@ -212,18 +254,22 @@ async def delete_class(
 async def add_teacher_to_class(
     class_id: int,
     teacher_data: ClassTeacherAdd,
-    admin: User = Depends(require_admin),
+    user: User = Depends(require_admin_or_teacher),
     db: Session = Depends(get_db)
 ):
-    """Add a teacher to a class (admin only)"""
+    """Add a teacher to a class (admin or class teacher)"""
     class_ = db.query(Class).filter(Class.id == class_id).first()
     if not class_:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # Verify teacher exists
-    teacher = db.query(User).filter(User.id == teacher_data.teacher_id, User.role == 'teacher').first()
+    # Non-admin users can only modify classes they teach
+    if user.role != 'admin' and not is_class_teacher(db, class_id, user.id):
+        raise HTTPException(status_code=403, detail="Not your class")
+
+    # Verify user exists (any user can be a teacher now)
+    teacher = db.query(User).filter(User.id == teacher_data.teacher_id).first()
     if not teacher:
-        raise HTTPException(status_code=400, detail="Teacher not found")
+        raise HTTPException(status_code=400, detail="User not found")
 
     # Check if already assigned
     existing = db.query(ClassTeacher).filter(
@@ -231,7 +277,7 @@ async def add_teacher_to_class(
         ClassTeacher.teacher_id == teacher_data.teacher_id
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Teacher already assigned to this class")
+        raise HTTPException(status_code=400, detail="User already assigned as teacher to this class")
 
     assignment = ClassTeacher(class_id=class_id, teacher_id=teacher_data.teacher_id)
     db.add(assignment)
@@ -280,14 +326,14 @@ async def add_student_to_class(
     if not class_:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # Teachers can only modify their own classes
-    if user.role == 'teacher' and not is_class_teacher(db, class_id, user.id):
+    # Non-admin users can only modify classes they teach
+    if user.role != 'admin' and not is_class_teacher(db, class_id, user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
-    # Verify student exists
-    student = db.query(User).filter(User.id == student_data.student_id, User.role == 'student').first()
+    # Verify user exists (any user can be a student now)
+    student = db.query(User).filter(User.id == student_data.student_id).first()
     if not student:
-        raise HTTPException(status_code=400, detail="Student not found")
+        raise HTTPException(status_code=400, detail="User not found")
 
     # Check if already enrolled
     existing = db.query(ClassStudent).filter(
@@ -295,7 +341,7 @@ async def add_student_to_class(
         ClassStudent.student_id == student_data.student_id
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Student already enrolled in this class")
+        raise HTTPException(status_code=400, detail="User already enrolled in this class")
 
     enrollment = ClassStudent(class_id=class_id, student_id=student_data.student_id)
     db.add(enrollment)
@@ -315,8 +361,8 @@ async def remove_student_from_class(
     if not class_:
         raise HTTPException(status_code=404, detail="Class not found")
 
-    # Teachers can only modify their own classes
-    if user.role == 'teacher' and not is_class_teacher(db, class_id, user.id):
+    # Non-admin users can only modify classes they teach
+    if user.role != 'admin' and not is_class_teacher(db, class_id, user.id):
         raise HTTPException(status_code=403, detail="Not your class")
 
     enrollment = db.query(ClassStudent).filter(

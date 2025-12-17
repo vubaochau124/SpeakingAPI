@@ -6,3 +6,4 @@ from .admin import router as admin_router
 from .classes import router as classes_router
 from .assignments import router as assignments_router
 from .evaluation import router as evaluation_router
+from .ai_conversation import router as ai_conversation_router

@@ -139,7 +139,7 @@ function ConversationRolePlay({ conversations, onFinish, loading }) {
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Conversation Practice</h2>
-            <p className="text-gray-500">Select a conversation to practice</p>
+            <p className="text-gray-500">Select a conversation to read</p>
           </div>
         </div>
 

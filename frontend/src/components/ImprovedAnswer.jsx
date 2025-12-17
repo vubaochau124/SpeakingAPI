@@ -91,7 +91,7 @@ const ImprovedAnswer = ({ improvedAnswerData, originalTranscript }) => {
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
             <p className="text-amber-200 text-sm leading-relaxed">
               <strong className="font-semibold">Note:</strong> This suggestion is meant for learning purposes.
-              Use it to understand how to improve your English speaking skills.
+              Use it to understand how to improve your speaking skills.
             </p>
           </div>
         </div>

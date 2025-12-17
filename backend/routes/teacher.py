@@ -14,34 +14,35 @@ async def get_all_students(
     teacher: User = Depends(require_teacher),
     db: Session = Depends(get_db)
 ):
-    """Get all students and their results (teacher only)"""
-    students = db.query(User).filter(User.role == 'student').all()
+    """Get all non-admin users who can be added as students to classes"""
+    # In the merged system, any non-admin user can be a student of a class
+    users = db.query(User).filter(User.role != 'admin').all()
 
     result = []
-    for student in students:
-        student_data = {
-            "id": student.id,
-            "username": student.username,
-            "email": student.email,
-            "created_at": student.created_at.isoformat() if student.created_at else None,
+    for user in users:
+        user_data = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
             "results": {}
         }
 
-        # Get student's results
+        # Get user's results
         for part_type in ['conversation', 'unscripted']:
             user_result = db.query(UserResult).filter(
-                UserResult.user_id == student.id,
+                UserResult.user_id == user.id,
                 UserResult.part_type == part_type
             ).first()
 
             if user_result:
-                student_data["results"][part_type] = {
+                user_data["results"][part_type] = {
                     "transcript": user_result.transcript,
                     "scores": user_result.scores,
                     "updated_at": user_result.updated_at.isoformat() if user_result.updated_at else None
                 }
 
-        result.append(student_data)
+        result.append(user_data)
 
     return {"students": result}
 
@@ -52,10 +53,10 @@ async def get_student_results(
     teacher: User = Depends(require_teacher),
     db: Session = Depends(get_db)
 ):
-    """Get detailed results for a specific student (teacher only)"""
-    student = db.query(User).filter(User.id == student_id, User.role == 'student').first()
+    """Get detailed results for a specific user (teacher only)"""
+    student = db.query(User).filter(User.id == student_id, User.role != 'admin').first()
     if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     results = db.query(UserResult).filter(UserResult.user_id == student_id).all()
 

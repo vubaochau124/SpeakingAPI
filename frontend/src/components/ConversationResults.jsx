@@ -189,30 +189,30 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
       {/* Lines with Transcript Mapping */}
       {lineMappings.length > 0 && (
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
+        <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
+            <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-2xl shadow-lg">
               📝
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-white">Line by Line Analysis</h3>
-              <p className="text-slate-400 text-sm">Click on yellow/red words for details</p>
+              <h3 className="text-2xl font-bold text-gray-900">Line by Line Analysis</h3>
+              <p className="text-gray-500 text-sm">Click on yellow/red words for details</p>
             </div>
           </div>
 
           {/* Legend */}
-          <div className="flex flex-wrap gap-4 mb-6 p-3 bg-slate-700/30 rounded-lg">
+          <div className="flex flex-wrap gap-4 mb-6 p-3 bg-gray-100 rounded-lg">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-              <span className="text-slate-300 text-sm">Good (80+)</span>
+              <span className="text-gray-600 text-sm">Good (80+)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-              <span className="text-slate-300 text-sm">Needs Work (60-79)</span>
+              <span className="text-gray-600 text-sm">Needs Work (60-79)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-red-500"></span>
-              <span className="text-slate-300 text-sm">Poor (&lt;60)</span>
+              <span className="text-gray-600 text-sm">Poor (&lt;60)</span>
             </div>
           </div>
 
@@ -221,21 +221,21 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
               const problemWords = getProblemWords(mapping.spokenWords);
 
               return (
-                <div key={idx} className="p-5 rounded-xl bg-slate-700/30 border border-slate-600/30">
+                <div key={idx} className="p-5 rounded-xl bg-gray-50 border border-gray-200">
                   {/* Line Header */}
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
-                      <span className="text-cyan-600 font-bold text-sm">{idx + 1}</span>
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center">
+                      <span className="text-blue-600 font-bold text-sm">{idx + 1}</span>
                     </div>
-                    <span className="text-slate-400 text-sm">Expected:</span>
+                    <span className="text-gray-500 text-sm">Expected:</span>
                   </div>
 
                   {/* Expected Text */}
-                  <p className="text-slate-300 text-sm mb-4 pl-11 italic">"{mapping.expectedText}"</p>
+                  <p className="text-gray-600 text-sm mb-4 pl-11 italic">"{mapping.expectedText}"</p>
 
                   {/* Spoken Words with Colors */}
                   <div className="pl-11 mb-4">
-                    <span className="text-slate-400 text-sm block mb-2">You said:</span>
+                    <span className="text-gray-500 text-sm block mb-2">You said:</span>
                     <div className="flex flex-wrap gap-1">
                       {mapping.spokenWords.map((word, wordIdx) => {
                         const wordScore = getWordScore(word);
@@ -247,7 +247,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                             onClick={() => isClickable && setSelectedWord(word)}
                             className={`px-2 py-1 rounded text-lg font-medium transition-all ${getWordColor(wordScore)} ${
                               isClickable
-                                ? 'cursor-pointer hover:scale-105 hover:bg-slate-600/50 underline decoration-dotted'
+                                ? 'cursor-pointer hover:scale-105 hover:bg-gray-200 underline decoration-dotted'
                                 : ''
                             }`}
                           >
@@ -267,8 +267,8 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
                   {/* Problem Words Summary */}
                   {problemWords.length > 0 && (
-                    <div className="pl-11 mt-3 pt-3 border-t border-slate-600/30">
-                      <span className="text-slate-400 text-xs">
+                    <div className="pl-11 mt-3 pt-3 border-t border-gray-200">
+                      <span className="text-gray-500 text-xs">
                         {problemWords.length} word{problemWords.length > 1 ? 's' : ''} need{problemWords.length === 1 ? 's' : ''} practice: {' '}
                         {problemWords.map((w, i) => (
                           <span key={i} className={getWordColor(getWordScore(w))}>
@@ -287,49 +287,49 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
       {/* Fluency Analysis */}
       {textScore?.fluency?.overall_metrics && (
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50 space-y-6">
+        <div className="bg-white shadow-sm rounded-2xl p-6 shadow-xl border border-gray-200 space-y-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg">
+            <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-2xl shadow-lg">
               🗣️
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-white">Fluency Analysis</h3>
-              <p className="text-slate-400 text-sm">Speech rate and pause metrics</p>
+              <h3 className="text-2xl font-bold text-gray-900">Fluency Analysis</h3>
+              <p className="text-gray-500 text-sm">Speech rate and pause metrics</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="group p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 hover:scale-[1.02] transition-all duration-300">
+            <div className="group p-5 rounded-xl bg-emerald-50 border border-emerald-200 hover:scale-[1.02] transition-all duration-300">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-2xl">🚀</span>
-                <p className="text-slate-300 text-sm font-medium">Speech Rate</p>
+                <p className="text-gray-600 text-sm font-medium">Speech Rate</p>
               </div>
               <p className="text-3xl font-bold text-emerald-600">
                 {textScore.fluency.overall_metrics.speech_rate?.toFixed(2)}
               </p>
-              <p className="text-xs text-slate-400 mt-1">words/second</p>
+              <p className="text-xs text-gray-500 mt-1">words/second</p>
             </div>
 
-            <div className="group p-5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 hover:scale-[1.02] transition-all duration-300">
+            <div className="group p-5 rounded-xl bg-cyan-50 border border-cyan-200 hover:scale-[1.02] transition-all duration-300">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-2xl">💬</span>
-                <p className="text-slate-300 text-sm font-medium">Articulation Rate</p>
+                <p className="text-gray-600 text-sm font-medium">Articulation Rate</p>
               </div>
               <p className="text-3xl font-bold text-cyan-600">
                 {textScore.fluency.overall_metrics.articulation_rate?.toFixed(2)}
               </p>
-              <p className="text-xs text-slate-400 mt-1">syllables/second</p>
+              <p className="text-xs text-gray-500 mt-1">syllables/second</p>
             </div>
 
-            <div className="group p-5 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:scale-[1.02] transition-all duration-300">
+            <div className="group p-5 rounded-xl bg-blue-50 border border-blue-200 hover:scale-[1.02] transition-all duration-300">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-2xl">⏱️</span>
-                <p className="text-slate-300 text-sm font-medium">Words Per Min</p>
+                <p className="text-gray-600 text-sm font-medium">Words Per Min</p>
               </div>
               <p className="text-3xl font-bold text-blue-600">
                 {textScore.fluency.overall_metrics.word_correct_per_minute?.toFixed(0)}
               </p>
-              <p className="text-xs text-slate-400 mt-1">correct wpm</p>
+              <p className="text-xs text-gray-500 mt-1">correct wpm</p>
             </div>
           </div>
         </div>
@@ -338,7 +338,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
       {/* Try Again Button */}
       <button
         onClick={onTryAgain}
-        className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-cyan-500/25"
+        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/25"
       >
         Try Again
       </button>
@@ -348,18 +348,18 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9998]"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
             onClick={() => setSelectedWord(null)}
           />
 
           {/* Popup */}
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-800 rounded-2xl shadow-2xl p-6 z-[9999] max-w-md w-full mx-4 border border-slate-700 max-h-[90vh] overflow-y-auto">
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl p-6 z-[9999] max-w-md w-full mx-4 border border-gray-200 max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-700">
+            <div className="flex justify-between items-start mb-4 pb-3 border-b border-gray-200">
               <div>
-                <h3 className="text-3xl font-bold text-white">{getWordWithStress(selectedWord)}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Original: {getWord(selectedWord)}</p>
-                <p className="text-sm text-slate-400 mt-1">
+                <h3 className="text-3xl font-bold text-gray-900">{getWordWithStress(selectedWord)}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Original: {getWord(selectedWord)}</p>
+                <p className="text-sm text-gray-600 mt-1">
                   Quality Score:{' '}
                   <span className={`font-semibold ${getScoreColor(getWordScore(selectedWord))}`}>
                     {formatScore(getWordScore(selectedWord))}
@@ -368,7 +368,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
               </div>
               <button
                 onClick={() => setSelectedWord(null)}
-                className="text-slate-400 hover:text-white text-2xl font-bold"
+                className="text-gray-400 hover:text-gray-900 text-2xl font-bold"
               >
                 ×
               </button>
@@ -376,7 +376,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
 
             {/* Error Type */}
             {getErrorType(selectedWord) && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <span className="text-red-600 font-medium">
                   Issue: {getErrorType(selectedWord).replace(/_/g, ' ')}
                 </span>
@@ -388,7 +388,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
               <button
                 onClick={() => playWordAudio(selectedWord)}
                 disabled={isPlaying}
-                className="w-full mb-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full mb-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isPlaying ? (
                   <>
@@ -405,7 +405,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
             {/* Syllables - only show if syllables have text */}
             {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).length > 0 && (
               <div className="mb-4">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Syllables (click to hear)</h4>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Syllables (click to hear)</h4>
                 <div className="flex flex-wrap gap-2">
                   {getSyllables(selectedWord).filter(syl => getSyllableText(syl)).map((syl, i) => {
                     const syllableScore = getSyllableScore(syl);
@@ -416,7 +416,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                         disabled={!results?.audio_data || isPlaying}
                         className={`px-3 py-2 rounded-lg border cursor-pointer transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${getWordBgColor(syllableScore)}`}
                       >
-                        <span className="text-white font-medium">
+                        <span className="text-gray-900 font-medium">
                           {getSyllableText(syl)}
                         </span>
                         <span className={`ml-2 text-sm ${getScoreColor(syllableScore)}`}>
@@ -433,20 +433,20 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
             {/* Phonemes Table - Only for English */}
             {showPhonemes && getPhonemes(selectedWord).length > 0 && (
               <div className="overflow-y-auto max-h-64">
-                <h4 className="text-sm font-medium text-slate-400 mb-2">Phonemes (click to hear)</h4>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Phonemes (click to hear)</h4>
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-slate-700/50">
-                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Phoneme</th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-300 text-sm">Score</th>
-                      <th className="text-center py-2 px-3 font-medium text-slate-300 text-sm">Play</th>
+                    <tr className="bg-gray-100">
+                      <th className="text-left py-2 px-3 font-medium text-gray-600 text-sm">Phoneme</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600 text-sm">Score</th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-600 text-sm">Play</th>
                     </tr>
                   </thead>
                   <tbody>
                     {getPhonemes(selectedWord).map((phone, index) => (
-                      <tr key={index} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-2 px-3">
-                          <span className="text-lg font-bold text-cyan-600">
+                          <span className="text-lg font-bold text-blue-600">
                             /{getPhonemeText(phone)}/
                           </span>
                         </td>
@@ -459,7 +459,7 @@ function ConversationResults({ results, conversationTexts, lineAudios, onTryAgai
                           <button
                             onClick={() => results?.audio_data && playPhonemeAudio(phone)}
                             disabled={!results?.audio_data || isPlaying}
-                            className="p-1 rounded hover:bg-slate-600/50 transition-colors disabled:opacity-50"
+                            className="p-1 rounded hover:bg-gray-200 transition-colors disabled:opacity-50"
                           >
                             🔊
                           </button>

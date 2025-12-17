@@ -7,6 +7,7 @@ import FeedbackDetails from './components/FeedbackDetails';
 import ImprovedAnswer from './components/ImprovedAnswer';
 import ConversationRolePlay from './components/ConversationRolePlay';
 import ConversationResults from './components/ConversationResults';
+import AIConversation from './components/AIConversation';
 import Login from './components/Login';
 import Register from './components/Register';
 import TeacherDashboard from './components/TeacherDashboard';
@@ -18,7 +19,7 @@ import axios from 'axios';
 
 function MainApp({ embedded = false }) {
   const { user, logout, getAuthHeaders } = useAuth();
-  const [activeTab, setActiveTab] = useState('conversation');
+  const [activeTab, setActiveTab] = useState('read-aloud');
   const [questions, setQuestions] = useState([]);
   const [topics, setTopics] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -318,9 +319,25 @@ function MainApp({ embedded = false }) {
         {/* Tab Navigation */}
         <div className="flex mb-8 bg-white shadow-sm rounded-2xl p-2 shadow-xl">
           <button
-            onClick={() => setActiveTab('conversation')}
-            className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
-              activeTab === 'conversation'
+            onClick={() => setActiveTab('read-aloud')}
+            className={`flex-1 py-4 px-4 rounded-xl font-semibold text-base transition-all duration-300 ${
+              activeTab === 'read-aloud'
+                ? 'bg-blue-600 text-gray-900 shadow-lg shadow-blue-500/25'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span className="hidden sm:inline"></span> Read Aloud
+            </div>
+            {conversationResults && <span className="ml-2 text-green-600">✓</span>}
+          </button>
+          <button
+            onClick={() => setActiveTab('ai-conversation')}
+            className={`flex-1 py-4 px-4 rounded-xl font-semibold text-base transition-all duration-300 ${
+              activeTab === 'ai-conversation'
                 ? 'bg-blue-600 text-gray-900 shadow-lg shadow-blue-500/25'
                 : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
             }`}
@@ -329,13 +346,12 @@ function MainApp({ embedded = false }) {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Part 1: Conversation
+              <span className="hidden sm:inline"></span> AI Chat
             </div>
-            {conversationResults && <span className="ml-2 text-green-600">✓</span>}
           </button>
           <button
             onClick={() => setActiveTab('unscripted')}
-            className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 ${
+            className={`flex-1 py-4 px-4 rounded-xl font-semibold text-base transition-all duration-300 ${
               activeTab === 'unscripted'
                 ? 'bg-blue-600 text-gray-900 shadow-lg shadow-blue-500/25'
                 : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
@@ -343,16 +359,16 @@ function MainApp({ embedded = false }) {
           >
             <div className="flex items-center justify-center gap-2">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
-              Part 2: Answer Question
+              <span className="hidden sm:inline"></span> Question
             </div>
             {unscriptedResults && <span className="ml-2 text-green-600">✓</span>}
           </button>
         </div>
 
-        {/* Conversation Tab Content */}
-        {activeTab === 'conversation' && (
+        {/* Read Aloud Tab Content (formerly Conversation) */}
+        {activeTab === 'read-aloud' && (
           <div className="space-y-6">
             {!conversationResults ? (
               <div className="bg-white shadow-sm rounded-2xl p-8 shadow-xl border border-gray-200">
@@ -379,9 +395,16 @@ function MainApp({ embedded = false }) {
             {conversationLoading && (
               <div className="bg-white shadow-sm rounded-2xl p-8 text-center shadow-xl border border-gray-200">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-                <p className="mt-4 text-gray-600">Analyzing your conversation...</p>
+                <p className="mt-4 text-gray-600">Analyzing your reading...</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* AI Conversation Tab Content */}
+        {activeTab === 'ai-conversation' && (
+          <div className="bg-white shadow-sm rounded-2xl p-8 shadow-xl border border-gray-200">
+            <AIConversation />
           </div>
         )}
 
@@ -517,7 +540,7 @@ function MainApp({ embedded = false }) {
   );
 }
 
-function StudentLayout() {
+function UserLayout() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('practice'); // 'practice', 'classes', 'progress'
 
@@ -538,7 +561,7 @@ function StudentLayout() {
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-full max-w-md">
                 <button
                   onClick={() => setActiveTab('practice')}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 px-2 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'practice'
                       ? 'bg-white text-blue-600 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
@@ -551,20 +574,20 @@ function StudentLayout() {
                 </button>
                 <button
                   onClick={() => setActiveTab('classes')}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 px-2 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'classes'
                       ? 'bg-white text-blue-600 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
-                  <span className="hidden sm:inline">Classes</span>
+                  <span className="hidden sm:inline">My Classes</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('progress')}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 px-2 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'progress'
                       ? 'bg-white text-blue-600 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
@@ -582,7 +605,7 @@ function StudentLayout() {
             <div className="flex-shrink-0 flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">{user?.username?.[0]?.toUpperCase() || 'S'}</span>
+                  <span className="text-white text-sm font-bold">{user?.username?.[0]?.toUpperCase() || 'U'}</span>
                 </div>
                 <span className="text-gray-700 text-sm">{user?.username}</span>
               </div>
@@ -635,12 +658,8 @@ function AppWithAuth() {
     return <AdminDashboard />;
   }
 
-  if (user?.role === 'teacher') {
-    return <TeacherDashboard />;
-  }
-
-  // Student view with navigation
-  return <StudentLayout />;
+  // Unified view for all users (can be both student and teacher)
+  return <UserLayout />;
 }
 
 function App() {

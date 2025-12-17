@@ -101,6 +101,7 @@ from routes.classes import router as classes_router
 from routes.assignments import router as assignments_router
 from routes.evaluation import router as evaluation_router
 from routes.progress import router as progress_router
+from routes.ai_conversation import router as ai_conversation_router
 
 app.include_router(auth_router)
 app.include_router(content_router)
@@ -110,6 +111,7 @@ app.include_router(classes_router)
 app.include_router(assignments_router)
 app.include_router(evaluation_router)
 app.include_router(progress_router)
+app.include_router(ai_conversation_router)
 
 # Serve frontend static files (for production)
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')

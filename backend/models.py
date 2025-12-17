@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, Index, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -18,6 +18,7 @@ class User(Base):
     results = relationship("UserResult", back_populates="user")
     teaching_assignments = relationship("ClassTeacher", back_populates="teacher")
     class_enrollments = relationship("ClassStudent", back_populates="student")
+    ai_conversation_sessions = relationship("AIConversationSession", back_populates="user")
 
 
 class Topic(Base):
@@ -168,3 +169,73 @@ class AssignmentResult(Base):
     __table_args__ = (
         UniqueConstraint('assignment_id', 'student_id', name='uq_assignment_student'),
     )
+
+
+# ============================================================================
+# AI Conversation Models (Interactive conversation with AI)
+# ============================================================================
+
+class AIConversationTopic(Base):
+    """Admin-created conversation topics for AI conversation practice"""
+    __tablename__ = "ai_conversation_topics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    name_vi = Column(String(200), nullable=True)  # Vietnamese name for display
+    description = Column(Text, nullable=True)
+    system_prompt = Column(Text, nullable=False)  # AI personality/context prompt
+    opening_message = Column(Text, nullable=False)  # First AI message to start conversation
+    language = Column(String(10), default='en-US')
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    sessions = relationship("AIConversationSession", back_populates="topic")
+
+
+class AIConversationSession(Base):
+    """A conversation session between user and AI"""
+    __tablename__ = "ai_conversation_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    topic_id = Column(Integer, ForeignKey("ai_conversation_topics.id"), nullable=True)
+    custom_topic = Column(String(300), nullable=True)  # If user enters custom topic
+    language = Column(String(10), default='en-US')
+    status = Column(String(20), default='active')  # 'active', 'completed'
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Final evaluation (calculated when session ends)
+    final_scores = Column(JSONB, nullable=True)
+    final_feedback = Column(Text, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="ai_conversation_sessions")
+    topic = relationship("AIConversationTopic", back_populates="sessions")
+    turns = relationship("AIConversationTurn", back_populates="session", order_by="AIConversationTurn.turn_order")
+
+    __table_args__ = (
+        Index('ix_ai_conversation_sessions_user', 'user_id', 'started_at'),
+    )
+
+
+class AIConversationTurn(Base):
+    """Individual turns in an AI conversation"""
+    __tablename__ = "ai_conversation_turns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("ai_conversation_sessions.id"), nullable=False)
+    turn_order = Column(Integer, nullable=False)
+
+    # AI turn data
+    ai_text = Column(Text, nullable=True)
+    ai_audio_url = Column(String(500), nullable=True)  # TTS audio file path
+
+    # User turn data
+    user_transcript = Column(Text, nullable=True)
+    user_audio_filename = Column(String(255), nullable=True)
+    azure_result = Column(JSONB, nullable=True)  # Pronunciation assessment data
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("AIConversationSession", back_populates="turns")

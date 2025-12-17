@@ -217,11 +217,109 @@ def convert_to_wav(input_path: str, enhance: bool = True) -> tuple:
                 pass
 
 
-def enhance_audio(wav_path: str) -> str:
-    """Enhance audio: noise reduction, high-pass filter, normalization.
+def analyze_audio_quality(audio_float: np.ndarray, sample_rate: int) -> dict:
+    """Analyze audio quality to determine if enhancement is needed.
+
+    Args:
+        audio_float: Audio data as float array (normalized to -1.0 to 1.0)
+        sample_rate: Sample rate in Hz
+
+    Returns:
+        dict: Quality metrics including:
+            - snr_estimate: Estimated signal-to-noise ratio in dB
+            - peak_amplitude: Maximum absolute amplitude
+            - rms_level: RMS level in dB
+            - is_clipping: Whether audio has clipping
+            - needs_enhancement: Whether enhancement is recommended
+            - enhancement_level: 'none', 'light', or 'full'
+    """
+    # Calculate RMS level
+    rms = np.sqrt(np.mean(audio_float ** 2))
+    rms_db = 20 * np.log10(rms + 1e-10)
+
+    # Peak amplitude
+    peak = np.max(np.abs(audio_float))
+
+    # Check for clipping (samples at or very near max)
+    clipping_threshold = 0.99
+    clipping_samples = np.sum(np.abs(audio_float) >= clipping_threshold)
+    is_clipping = clipping_samples > len(audio_float) * 0.001  # More than 0.1% clipped
+
+    # Estimate SNR using a simple method:
+    # Compare RMS of likely speech segments vs likely silence segments
+    # Split audio into frames
+    frame_size = int(0.025 * sample_rate)  # 25ms frames
+    hop_size = int(0.010 * sample_rate)    # 10ms hop
+
+    frame_energies = []
+    for i in range(0, len(audio_float) - frame_size, hop_size):
+        frame = audio_float[i:i + frame_size]
+        energy = np.sqrt(np.mean(frame ** 2))
+        frame_energies.append(energy)
+
+    if len(frame_energies) < 10:
+        # Too short to analyze properly
+        return {
+            'snr_estimate': 30,  # Assume good quality
+            'peak_amplitude': peak,
+            'rms_level': rms_db,
+            'is_clipping': is_clipping,
+            'needs_enhancement': False,
+            'enhancement_level': 'none'
+        }
+
+    frame_energies = np.array(frame_energies)
+
+    # Estimate noise floor from quietest 10% of frames
+    sorted_energies = np.sort(frame_energies)
+    noise_floor = np.mean(sorted_energies[:max(1, len(sorted_energies) // 10)])
+
+    # Estimate signal level from loudest 30% of frames
+    signal_level = np.mean(sorted_energies[-max(1, len(sorted_energies) * 3 // 10):])
+
+    # Calculate SNR estimate
+    if noise_floor > 1e-10:
+        snr_estimate = 20 * np.log10(signal_level / noise_floor)
+    else:
+        snr_estimate = 60  # Very clean audio
+
+    # Determine enhancement needs
+    # Good audio: SNR > 25dB, RMS > -30dB, no clipping
+    # Moderate audio: SNR 15-25dB or RMS -30 to -40dB
+    # Poor audio: SNR < 15dB or RMS < -40dB
+
+    if snr_estimate > 25 and rms_db > -30 and not is_clipping:
+        needs_enhancement = False
+        enhancement_level = 'none'
+    elif snr_estimate > 15 and rms_db > -40:
+        needs_enhancement = True
+        enhancement_level = 'light'
+    else:
+        needs_enhancement = True
+        enhancement_level = 'full'
+
+    return {
+        'snr_estimate': round(snr_estimate, 1),
+        'peak_amplitude': round(peak, 3),
+        'rms_level': round(rms_db, 1),
+        'is_clipping': is_clipping,
+        'needs_enhancement': needs_enhancement,
+        'enhancement_level': enhancement_level
+    }
+
+
+def enhance_audio(wav_path: str, force_level: str = None) -> str:
+    """Smart audio enhancement - only processes when needed.
+
+    Analyzes audio quality first and applies appropriate level of enhancement:
+    - 'none': Skip enhancement for clean audio (preserves original quality)
+    - 'light': Light normalization only (for moderately good audio)
+    - 'full': Full enhancement with noise reduction (for noisy audio)
 
     Args:
         wav_path: Path to WAV file (modified in place)
+        force_level: Force a specific enhancement level ('none', 'light', 'full')
+                    If None, auto-detects based on audio quality
 
     Returns:
         str: Path to enhanced file (same as input)
@@ -244,33 +342,69 @@ def enhance_audio(wav_path: str) -> str:
         if len(audio_float.shape) > 1:
             audio_float = np.mean(audio_float, axis=1)
 
-        # 1. Noise reduction
-        audio_float = nr.reduce_noise(y=audio_float, sr=sample_rate, prop_decrease=0.8, stationary=True)
+        # Analyze audio quality
+        quality = analyze_audio_quality(audio_float, sample_rate)
+        enhancement_level = force_level if force_level else quality['enhancement_level']
 
-        # 2. High-pass filter (80Hz)
-        nyquist = sample_rate / 2
-        cutoff = 80 / nyquist
-        if cutoff < 1:
-            b, a = butter(4, cutoff, btype='high')
-            audio_float = filtfilt(b, a, audio_float)
+        print(f"[AUDIO] Quality analysis: SNR={quality['snr_estimate']}dB, "
+              f"RMS={quality['rms_level']}dB, Peak={quality['peak_amplitude']}, "
+              f"Enhancement={enhancement_level}")
 
-        # 3. Normalize to -3 dBFS (suitable for speech recognition)
+        if enhancement_level == 'none':
+            print(f"[AUDIO] Skipping enhancement - audio quality is good")
+            return wav_path
+
+        # Apply enhancement based on level
+        if enhancement_level == 'full':
+            # 1. Noise reduction (less aggressive than before)
+            # Use prop_decrease=0.5 instead of 0.8, and non-stationary for better speech preservation
+            audio_float = nr.reduce_noise(
+                y=audio_float,
+                sr=sample_rate,
+                prop_decrease=0.5,  # Less aggressive - was 0.8
+                stationary=False,   # Better for varying speech - was True
+                n_fft=2048,
+                hop_length=512
+            )
+            print(f"[AUDIO] Applied noise reduction (moderate)")
+
+            # 2. High-pass filter (60Hz instead of 80Hz to preserve more bass)
+            nyquist = sample_rate / 2
+            cutoff = 60 / nyquist  # Was 80Hz
+            if cutoff < 1:
+                b, a = butter(2, cutoff, btype='high')  # 2nd order instead of 4th
+                audio_float = filtfilt(b, a, audio_float)
+
+        # For both 'light' and 'full': Apply gentle normalization
+        # 3. Normalize to -6 dBFS (more headroom than -3 dBFS)
         max_val = np.max(np.abs(audio_float))
         if max_val > 0:
-            target_level = 10 ** (-3 / 20)  # -3 dBFS ≈ 0.708
-            audio_float = audio_float * (target_level / max_val)
+            # Use RMS-based normalization for more consistent levels
+            rms = np.sqrt(np.mean(audio_float ** 2))
+            if rms > 1e-10:
+                target_rms = 10 ** (-18 / 20)  # Target -18 dBFS RMS (broadcast standard)
+                current_rms = rms
+                gain = target_rms / current_rms
 
-        # 4. Soft compression (only compress loud peaks)
-        threshold, ratio = 0.8, 4.0
-        audio_float = np.where(
-            np.abs(audio_float) > threshold,
-            np.sign(audio_float) * (threshold + (np.abs(audio_float) - threshold) / ratio),
-            audio_float
-        )
+                # Limit gain to avoid amplifying noise too much
+                gain = min(gain, 10.0)  # Max 20dB gain
+                gain = max(gain, 0.1)   # Min -20dB gain
+
+                audio_float = audio_float * gain
+                print(f"[AUDIO] Applied normalization (gain={gain:.2f}x)")
+
+        # 4. Soft limiter (gentler than compression) - only if peaks exceed threshold
+        limit_threshold = 0.95
+        if np.max(np.abs(audio_float)) > limit_threshold:
+            # Soft clipping using tanh
+            audio_float = np.tanh(audio_float / limit_threshold) * limit_threshold
+            print(f"[AUDIO] Applied soft limiting")
 
         # Save back
         wavfile.write(wav_path, sample_rate, np.clip(audio_float * 32768, -32768, 32767).astype(np.int16))
+        print(f"[AUDIO] Enhancement complete ({enhancement_level})")
         return wav_path
 
-    except Exception:
+    except Exception as e:
+        print(f"[AUDIO] Enhancement error: {e}")
         return wav_path
