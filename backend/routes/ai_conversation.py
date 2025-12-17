@@ -1,11 +1,9 @@
 """AI Conversation Routes - Interactive conversation with AI"""
 import os
 from datetime import datetime
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
 
 from database import get_db
 from models import (
@@ -13,67 +11,26 @@ from models import (
 )
 from auth import get_current_user
 from ai_conversation_service import get_ai_conversation_service, TTS_AUDIO_FOLDER
+from schemas import (
+    AIConversationStartRequest,
+    AIConversationStartResponse,
+    AIConversationTurnResponse,
+    AIConversationEndResponse,
+    AITopicResponse,
+    AISessionHistoryItem,
+    AITopicCreateRequest,
+    AITopicUpdateRequest,
+    AITopicAdminResponse,
+)
 
 router = APIRouter(prefix="/api/ai-conversation", tags=["AI Conversation"])
-
-
-# ============================================================================
-# Pydantic Schemas
-# ============================================================================
-
-class StartSessionRequest(BaseModel):
-    topic_id: Optional[int] = None
-    custom_topic: Optional[str] = None
-    language: str = 'en-US'
-
-
-class StartSessionResponse(BaseModel):
-    session_id: int
-    ai_message: str
-    ai_audio_url: Optional[str] = None
-    topic: str
-
-
-class TurnResponse(BaseModel):
-    user_transcript: str
-    ai_text: str
-    ai_audio_url: Optional[str] = None
-    turn_number: int
-
-
-class EndSessionResponse(BaseModel):
-    overall_band: float
-    summary: dict
-    encouragement: str
-    turn_count: int
-    duration_minutes: Optional[float] = None
-    pronunciation_score: Optional[float] = None
-
-
-class TopicResponse(BaseModel):
-    id: int
-    name: str
-    name_vi: Optional[str] = None
-    description: Optional[str] = None
-    language: str
-
-
-class SessionHistoryItem(BaseModel):
-    id: int
-    topic: str
-    language: str
-    status: str
-    started_at: datetime
-    ended_at: Optional[datetime] = None
-    final_scores: Optional[dict] = None
-    turn_count: int
 
 
 # ============================================================================
 # Endpoints
 # ============================================================================
 
-@router.get("/topics", response_model=list[TopicResponse])
+@router.get("/topics", response_model=list[AITopicResponse])
 async def get_topics(
     language: str = 'en-US',
     db: Session = Depends(get_db)
@@ -85,7 +42,7 @@ async def get_topics(
     ).all()
 
     return [
-        TopicResponse(
+        AITopicResponse(
             id=t.id,
             name=t.name,
             name_vi=t.name_vi,
@@ -96,9 +53,9 @@ async def get_topics(
     ]
 
 
-@router.post("/start", response_model=StartSessionResponse)
+@router.post("/start", response_model=AIConversationStartResponse)
 async def start_session(
-    request: StartSessionRequest,
+    request: AIConversationStartRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -157,7 +114,7 @@ async def start_session(
     db.add(first_turn)
     db.commit()
 
-    return StartSessionResponse(
+    return AIConversationStartResponse(
         session_id=session.id,
         ai_message=opening_message,
         ai_audio_url=ai_audio_url,
@@ -165,7 +122,7 @@ async def start_session(
     )
 
 
-@router.post("/{session_id}/turn", response_model=TurnResponse)
+@router.post("/{session_id}/turn", response_model=AIConversationTurnResponse)
 async def submit_turn(
     session_id: int,
     audio: UploadFile = File(...),
@@ -261,7 +218,7 @@ async def submit_turn(
 
     db.commit()
 
-    return TurnResponse(
+    return AIConversationTurnResponse(
         user_transcript=user_transcript,
         ai_text=ai_text,
         ai_audio_url=ai_audio_url,
@@ -269,7 +226,7 @@ async def submit_turn(
     )
 
 
-@router.post("/{session_id}/end", response_model=EndSessionResponse)
+@router.post("/{session_id}/end", response_model=AIConversationEndResponse)
 async def end_session(
     session_id: int,
     current_user: User = Depends(get_current_user),
@@ -289,7 +246,7 @@ async def end_session(
 
     if session.status == 'completed':
         # Return existing evaluation
-        return EndSessionResponse(
+        return AIConversationEndResponse(
             overall_band=session.final_scores.get('overall_band', 5.0) if session.final_scores else 5.0,
             summary=session.final_scores.get('summary', {}) if session.final_scores else {},
             encouragement=session.final_scores.get('encouragement', '') if session.final_scores else '',
@@ -321,7 +278,7 @@ async def end_session(
 
     db.commit()
 
-    return EndSessionResponse(
+    return AIConversationEndResponse(
         overall_band=evaluation.get('overall_band', 5.0),
         summary=evaluation.get('summary', {}),
         encouragement=evaluation.get('encouragement', ''),
@@ -331,7 +288,7 @@ async def end_session(
     )
 
 
-@router.get("/history", response_model=list[SessionHistoryItem])
+@router.get("/history", response_model=list[AISessionHistoryItem])
 async def get_history(
     limit: int = 10,
     current_user: User = Depends(get_current_user),
@@ -357,7 +314,7 @@ async def get_history(
             AIConversationTurn.user_transcript != None
         ).count()
 
-        result.append(SessionHistoryItem(
+        result.append(AISessionHistoryItem(
             id=session.id,
             topic=topic_name or "Unknown",
             language=session.language,
@@ -450,18 +407,38 @@ async def get_tts_audio(filename: str):
 # Admin: Topic Management
 # ============================================================================
 
-class CreateTopicRequest(BaseModel):
-    name: str
-    name_vi: Optional[str] = None
-    description: Optional[str] = None
-    system_prompt: str
-    opening_message: str
-    language: str = 'en-US'
+@router.get("/admin/topics", response_model=list[AITopicAdminResponse])
+async def get_all_topics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all topics including inactive ones (admin only)"""
+    if current_user.role not in ['admin', 'teacher']:
+        raise HTTPException(status_code=403, detail="Admin or teacher access required")
+
+    topics = db.query(AIConversationTopic).order_by(
+        AIConversationTopic.language,
+        AIConversationTopic.name
+    ).all()
+
+    return [
+        AITopicAdminResponse(
+            id=t.id,
+            name=t.name,
+            name_vi=t.name_vi,
+            description=t.description,
+            system_prompt=t.system_prompt,
+            opening_message=t.opening_message,
+            language=t.language,
+            is_active=t.is_active
+        )
+        for t in topics
+    ]
 
 
-@router.post("/admin/topics", response_model=TopicResponse)
+@router.post("/admin/topics", response_model=AITopicAdminResponse)
 async def create_topic(
-    request: CreateTopicRequest,
+    request: AITopicCreateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -482,12 +459,61 @@ async def create_topic(
     db.commit()
     db.refresh(topic)
 
-    return TopicResponse(
+    return AITopicAdminResponse(
         id=topic.id,
         name=topic.name,
         name_vi=topic.name_vi,
         description=topic.description,
-        language=topic.language
+        system_prompt=topic.system_prompt,
+        opening_message=topic.opening_message,
+        language=topic.language,
+        is_active=topic.is_active
+    )
+
+
+@router.put("/admin/topics/{topic_id}", response_model=AITopicAdminResponse)
+async def update_topic(
+    topic_id: int,
+    request: AITopicUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a conversation topic (admin only)"""
+    if current_user.role not in ['admin', 'teacher']:
+        raise HTTPException(status_code=403, detail="Admin or teacher access required")
+
+    topic = db.query(AIConversationTopic).get(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    # Update fields if provided
+    if request.name is not None:
+        topic.name = request.name
+    if request.name_vi is not None:
+        topic.name_vi = request.name_vi
+    if request.description is not None:
+        topic.description = request.description
+    if request.system_prompt is not None:
+        topic.system_prompt = request.system_prompt
+    if request.opening_message is not None:
+        topic.opening_message = request.opening_message
+    if request.language is not None:
+        topic.language = request.language
+    if request.is_active is not None:
+        topic.is_active = request.is_active
+
+    db.commit()
+    db.refresh(topic)
+
+    return AITopicAdminResponse(
+        id=topic.id,
+        name=topic.name,
+        name_vi=topic.name_vi,
+        description=topic.description,
+        system_prompt=topic.system_prompt,
+        opening_message=topic.opening_message,
+        language=topic.language,
+        is_active=topic.is_active
     )
 
 

@@ -10,7 +10,6 @@ import ConversationResults from './components/ConversationResults';
 import AIConversation from './components/AIConversation';
 import Login from './components/Login';
 import Register from './components/Register';
-import TeacherDashboard from './components/TeacherDashboard';
 import StudentDashboard from './components/StudentDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -415,7 +414,9 @@ function MainApp({ embedded = false }) {
               <div className="bg-white shadow-sm rounded-2xl p-8 shadow-xl border border-gray-200">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                    <span className="text-gray-900 font-bold">2</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">Answer a Question</h2>

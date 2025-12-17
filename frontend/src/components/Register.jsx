@@ -6,7 +6,6 @@ function Register({ onSwitchToLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('student');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -28,7 +27,8 @@ function Register({ onSwitchToLogin }) {
     setLoading(true);
 
     try {
-      await register(username, email, password, role);
+      // All users register as 'student' - actual role per class is determined by ClassTeacher/ClassStudent
+      await register(username, email, password);
       // Registration successful, redirect to login
       onSwitchToLogin();
     } catch (err) {
@@ -58,34 +58,6 @@ function Register({ onSwitchToLogin }) {
                 {error}
               </div>
             )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">I am a</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRole('student')}
-                  className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                    role === 'student'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Student
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('teacher')}
-                  className={`py-3 px-4 rounded-xl font-medium transition-all ${
-                    role === 'teacher'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Teacher
-                </button>
-              </div>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>

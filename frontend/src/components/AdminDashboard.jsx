@@ -12,6 +12,7 @@ function AdminDashboard() {
   const [classes, setClasses] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [aiTopics, setAiTopics] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -51,6 +52,19 @@ function AdminDashboard() {
   const [showQuestionForm, setShowQuestionForm] = useState(false);
   const [questionForm, setQuestionForm] = useState({ topic_name: '', question_text: '' });
 
+  // AI Topic form state
+  const [showAiTopicForm, setShowAiTopicForm] = useState(false);
+  const [aiTopicForm, setAiTopicForm] = useState({
+    name: '',
+    name_vi: '',
+    description: '',
+    system_prompt: '',
+    opening_message: '',
+    language: 'en-US',
+    is_active: true
+  });
+  const [editingAiTopicId, setEditingAiTopicId] = useState(null);
+
   useEffect(() => {
     fetchData();
   }, [activeTab]);
@@ -84,6 +98,9 @@ function AdminDashboard() {
       } else if (activeTab === 'questions') {
         const res = await axios.get('/api/questions', { headers: getAuthHeaders() });
         setQuestions(res.data.questions || []);
+      } else if (activeTab === 'ai-topics') {
+        const res = await axios.get('/api/ai-conversation/admin/topics', { headers: getAuthHeaders() });
+        setAiTopics(res.data || []);
       }
     } catch (err) {
       setError('Failed to load data');
@@ -315,6 +332,71 @@ function AdminDashboard() {
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to delete question');
     }
+  };
+
+  // AI Topic management
+  const handleCreateAiTopic = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await axios.post('/api/ai-conversation/admin/topics', aiTopicForm, { headers: getAuthHeaders() });
+      setSuccess('AI Topic created successfully');
+      setShowAiTopicForm(false);
+      resetAiTopicForm();
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to create AI topic');
+    }
+  };
+
+  const handleUpdateAiTopic = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await axios.put(`/api/ai-conversation/admin/topics/${editingAiTopicId}`, aiTopicForm, { headers: getAuthHeaders() });
+      setSuccess('AI Topic updated successfully');
+      setShowAiTopicForm(false);
+      resetAiTopicForm();
+      setEditingAiTopicId(null);
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update AI topic');
+    }
+  };
+
+  const handleDeleteAiTopic = async (topicId) => {
+    if (!confirm('Are you sure you want to deactivate this AI topic?')) return;
+    try {
+      await axios.delete(`/api/ai-conversation/admin/topics/${topicId}`, { headers: getAuthHeaders() });
+      setSuccess('AI Topic deactivated successfully');
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to deactivate AI topic');
+    }
+  };
+
+  const handleToggleAiTopicActive = async (topic) => {
+    try {
+      await axios.put(`/api/ai-conversation/admin/topics/${topic.id}`, {
+        is_active: !topic.is_active
+      }, { headers: getAuthHeaders() });
+      setSuccess(`AI Topic ${topic.is_active ? 'deactivated' : 'activated'} successfully`);
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to toggle AI topic');
+    }
+  };
+
+  const resetAiTopicForm = () => {
+    setAiTopicForm({
+      name: '',
+      name_vi: '',
+      description: '',
+      system_prompt: '',
+      opening_message: '',
+      language: 'en-US',
+      is_active: true
+    });
   };
 
   const addDialogueLine = () => {
@@ -707,6 +789,7 @@ function AdminDashboard() {
   const filteredClasses = filterBySearch(classes, ['name', 'description']);
   const filteredConversations = filterBySearch(conversations, ['topic']);
   const filteredQuestions = filterBySearch(questions, ['topic', 'question']);
+  const filteredAiTopics = filterBySearch(aiTopics, ['name', 'name_vi', 'description', 'language']);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -729,18 +812,18 @@ function AdminDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex mb-6 bg-white shadow-sm rounded-xl p-1">
-          {['users', 'classes', 'conversations', 'questions', 'statistics'].map((tab) => (
+        <div className="flex mb-6 bg-white shadow-sm rounded-xl p-1 overflow-x-auto">
+          {['users', 'classes', 'conversations', 'questions', 'ai-topics', 'statistics'].map((tab) => (
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setSelectedClass(null); setSearchQuery(''); }}
-              className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all capitalize ${
+              className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
                 activeTab === tab
-                  ? 'bg-blue-600 text-gray-900 shadow-lg'
+                  ? 'bg-blue-600 text-white shadow-lg'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
             >
-              {tab}
+              {tab === 'ai-topics' ? 'AI Topics' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -1100,6 +1183,192 @@ function AdminDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Topics Tab */}
+            {activeTab === 'ai-topics' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-gray-900">AI Conversation Topics ({filteredAiTopics.length})</h2>
+                  <button
+                    onClick={() => {
+                      setShowAiTopicForm(true);
+                      setEditingAiTopicId(null);
+                      resetAiTopicForm();
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    + New AI Topic
+                  </button>
+                </div>
+
+                {showAiTopicForm && (
+                  <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">
+                      {editingAiTopicId ? 'Edit AI Topic' : 'Create New AI Topic'}
+                    </h3>
+                    <form onSubmit={editingAiTopicId ? handleUpdateAiTopic : handleCreateAiTopic} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Topic Name (English) *</label>
+                          <input
+                            type="text"
+                            value={aiTopicForm.name}
+                            onChange={(e) => setAiTopicForm({ ...aiTopicForm, name: e.target.value })}
+                            required
+                            className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                            placeholder="e.g., Travel and Holidays"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Topic Name (Vietnamese)</label>
+                          <input
+                            type="text"
+                            value={aiTopicForm.name_vi}
+                            onChange={(e) => setAiTopicForm({ ...aiTopicForm, name_vi: e.target.value })}
+                            className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                            placeholder="e.g., Du lịch và Kỳ nghỉ"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Language *</label>
+                          <select
+                            value={aiTopicForm.language}
+                            onChange={(e) => setAiTopicForm({ ...aiTopicForm, language: e.target.value })}
+                            className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                          >
+                            <option value="en-US">English (US)</option>
+                            <option value="en-GB">English (UK)</option>
+                            <option value="zh-CN">Chinese</option>
+                            <option value="ja-JP">Japanese</option>
+                            <option value="ko-KR">Korean</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Status</label>
+                          <select
+                            value={aiTopicForm.is_active ? 'active' : 'inactive'}
+                            onChange={(e) => setAiTopicForm({ ...aiTopicForm, is_active: e.target.value === 'active' })}
+                            className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                          >
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                        <input
+                          type="text"
+                          value={aiTopicForm.description}
+                          onChange={(e) => setAiTopicForm({ ...aiTopicForm, description: e.target.value })}
+                          className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                          placeholder="Brief description of the topic"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Opening Message (AI's First Line) *</label>
+                        <textarea
+                          value={aiTopicForm.opening_message}
+                          onChange={(e) => setAiTopicForm({ ...aiTopicForm, opening_message: e.target.value })}
+                          required
+                          className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                          rows="2"
+                          placeholder="e.g., Hi! I'd love to talk about travel with you. Have you been on any exciting trips recently?"
+                        />
+                        <p className="text-gray-500 text-xs mt-1">This is what the AI will say first when the user selects this topic. Pre-defining this improves UX by avoiding generation delay.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">System Prompt (AI Personality) *</label>
+                        <textarea
+                          value={aiTopicForm.system_prompt}
+                          onChange={(e) => setAiTopicForm({ ...aiTopicForm, system_prompt: e.target.value })}
+                          required
+                          className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-900"
+                          rows="4"
+                          placeholder="You are a friendly English conversation partner. Help the user practice speaking about travel topics..."
+                        />
+                        <p className="text-gray-500 text-xs mt-1">Instructions for how the AI should behave during the conversation.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                          {editingAiTopicId ? 'Update' : 'Create'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAiTopicForm(false);
+                            setEditingAiTopicId(null);
+                            resetAiTopicForm();
+                          }}
+                          className="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                <div className="grid gap-4">
+                  {filteredAiTopics.map((topic) => (
+                    <div key={topic.id} className={`bg-white shadow-sm rounded-xl p-4 border ${topic.is_active ? 'border-gray-200' : 'border-red-200 bg-red-50'}`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-bold text-gray-900">{topic.name}</h3>
+                            {topic.name_vi && <span className="text-gray-500">({topic.name_vi})</span>}
+                            <span className={`px-2 py-0.5 text-xs rounded ${topic.is_active ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                              {topic.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                            <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-600">
+                              {topic.language}
+                            </span>
+                          </div>
+                          {topic.description && <p className="text-gray-500 text-sm mb-2">{topic.description}</p>}
+                          <div className="bg-gray-50 rounded-lg p-3 mb-2">
+                            <p className="text-xs text-gray-500 mb-1">Opening Message:</p>
+                            <p className="text-gray-700 text-sm italic">"{topic.opening_message}"</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            onClick={() => handleToggleAiTopicActive(topic)}
+                            className={`px-3 py-1 rounded text-sm ${topic.is_active ? 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}`}
+                          >
+                            {topic.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setAiTopicForm({
+                                name: topic.name,
+                                name_vi: topic.name_vi || '',
+                                description: topic.description || '',
+                                system_prompt: topic.system_prompt,
+                                opening_message: topic.opening_message,
+                                language: topic.language,
+                                is_active: topic.is_active
+                              });
+                              setEditingAiTopicId(topic.id);
+                              setShowAiTopicForm(true);
+                            }}
+                            className="px-3 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 text-sm"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredAiTopics.length === 0 && (
+                    <div className="text-center py-12 text-gray-500">
+                      <p>No AI topics yet. Create one to get started!</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
