@@ -7,8 +7,8 @@ import { useState, useRef, useEffect } from 'react';
 // Instead of sending every N seconds, we detect natural pauses in speech.
 // ============================================================================
 
-const SILENCE_THRESHOLD = 0.015;  // RMS threshold below which audio is considered silence (0-1 scale)
-const SILENCE_DURATION_MS = 800;  // How long silence must persist to trigger chunk send (ms)
+const SILENCE_THRESHOLD = 0.2;  // RMS threshold below which audio is considered silence (0-1 scale)
+const SILENCE_DURATION_MS = 1000;  // How long silence must persist to trigger chunk send (ms)
 const MIN_AUDIO_LENGTH_MS = 1500; // Minimum audio length before considering silence trigger (ms)
 const MAX_CHUNK_DURATION_MS = 15000; // Maximum chunk duration before forcing send (ms)
 const ANALYSIS_INTERVAL_MS = 100; // How often to analyze audio levels (ms)
@@ -67,6 +67,7 @@ function ChunkedAudioRecorder({
   const silenceCheckIntervalRef = useRef(null);  // Interval for checking silence
   const isProcessingChunkRef = useRef(false);  // Prevent concurrent chunk processing
   const chunkIndexRef = useRef(0);  // Track chunk index
+  const isRecordingRef = useRef(false);  // Ref to avoid stale closure in setInterval
 
   // Cleanup on unmount
   useEffect(() => {
@@ -121,19 +122,38 @@ function ChunkedAudioRecorder({
     return Math.sqrt(sum / dataArray.length) / 255;
   };
 
+  // Debug: track last log time to avoid spamming console
+  const lastDebugLogRef = useRef(0);
+  const DEBUG_LOG_INTERVAL_MS = 500; // Log every 500ms
+
   // Check for silence and trigger chunk processing
   const checkSilenceAndProcess = async () => {
-    if (!isRecording || isProcessingChunkRef.current) return;
+    // Use ref instead of state to avoid stale closure in setInterval
+    if (!isRecordingRef.current || isProcessingChunkRef.current) return;
 
     const rms = calculateRMS();
     const now = Date.now();
     const chunkDurationMs = now - (recordingStartTimeRef.current + chunkStartTimeRef.current * 1000);
+
+    // Debug logging (every 500ms to avoid spam)
+    if (now - lastDebugLogRef.current >= DEBUG_LOG_INTERVAL_MS) {
+      const isBelowThreshold = rms < silenceThreshold;
+      const silenceDurationMs = silenceStartTimeRef.current ? now - silenceStartTimeRef.current : 0;
+      console.log(
+        `[RMS Debug] rms=${rms.toFixed(4)} | threshold=${silenceThreshold} | ` +
+        `belowThreshold=${isBelowThreshold} | silenceMs=${silenceDurationMs.toFixed(0)} | ` +
+        `chunkMs=${chunkDurationMs.toFixed(0)} | minAudioMs=${MIN_AUDIO_LENGTH_MS} | ` +
+        `chunks=${currentChunkRef.current.length}`
+      );
+      lastDebugLogRef.current = now;
+    }
 
     // Check if audio is below silence threshold
     if (rms < silenceThreshold) {
       // Start tracking silence if not already
       if (silenceStartTimeRef.current === null) {
         silenceStartTimeRef.current = now;
+        console.log(`[Silence] Started tracking silence at rms=${rms.toFixed(4)}`);
       }
       setIsSilent(true);
 
@@ -147,13 +167,20 @@ function ChunkedAudioRecorder({
         (chunkDurationMs >= chunkDuration * 1000);  // Max duration reached
 
       if (shouldTrigger && currentChunkRef.current.length > 0) {
-        console.log(`[Silence] Triggering chunk after ${silenceDurationMs}ms silence, ${chunkDurationMs}ms audio`);
+        console.log(
+          `[Silence] ✅ TRIGGERING chunk #${chunkIndexRef.current} | ` +
+          `silenceMs=${silenceDurationMs.toFixed(0)} (need ${silenceDuration}) | ` +
+          `chunkMs=${chunkDurationMs.toFixed(0)} (min ${MIN_AUDIO_LENGTH_MS})`
+        );
         await processChunk(chunkIndexRef.current);
         chunkIndexRef.current++;
         setChunkCount(chunkIndexRef.current);
       }
     } else {
       // Audio detected - reset silence tracking
+      if (silenceStartTimeRef.current !== null) {
+        console.log(`[Silence] Audio resumed at rms=${rms.toFixed(4)}`);
+      }
       silenceStartTimeRef.current = null;
       setIsSilent(false);
     }
@@ -374,6 +401,7 @@ function ChunkedAudioRecorder({
       // Start recording with 250ms timeslice for responsive chunking
       mediaRecorderRef.current.start(250);
       setIsRecording(true);
+      isRecordingRef.current = true;  // Set ref for interval callback
       setRecordStatus('🔴 Recording (silence detection active)');
 
       // Start audio level animation
@@ -416,6 +444,7 @@ function ChunkedAudioRecorder({
     }
 
     setIsRecording(false);
+    isRecordingRef.current = false;  // Clear ref to stop interval processing
     setIsSilent(false);
 
     // Process any remaining data as final chunk
